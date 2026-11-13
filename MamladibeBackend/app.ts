@@ -10,4 +10,6 @@ await connectDatabase(config.MONGODB_URI, false);
 
 const app: FastifyInstance = await buildApp({ config });
 
+void app.listen({ port: config.PORT, host: config.HOST });
+
 export default app;
