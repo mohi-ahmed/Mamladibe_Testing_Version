@@ -23,7 +23,7 @@
     "test:acceptance:admin": "tsx src/scripts/verify-admin-acceptance.ts"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": "24.x"
   },
   "overrides": {
     "@typescript-eslint/typescript-estree": {
