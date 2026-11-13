@@ -84,6 +84,10 @@ export interface Incident {
   isEdited?: boolean | undefined;
   editedAt?: number | undefined;
   byModerator?: boolean | undefined;
+  viewerState: {
+    vote: "support" | "dispute" | null;
+    hasFlagged: boolean;
+  };
 }
 
 export type CommentType = "correction" | "extra" | "opinion";
@@ -100,6 +104,8 @@ export interface IncidentComment {
   text: string;
   createdAt: number;
   mine?: boolean | undefined;
+  canDelete?: boolean | undefined;
+  hasFlagged?: boolean | undefined;
 }
 
 export const INCIDENT_FLAG_REASONS = [
@@ -217,7 +223,7 @@ export function formatDateTime(ts: number) {
 const MIN = 60_000;
 const now = Date.now();
 
-type Seed = Omit<Incident, "id" | "createdAt" | "incidentAt"> & { ago: number };
+type Seed = Omit<Incident, "id" | "createdAt" | "incidentAt" | "viewerState"> & { ago: number };
 
 const SEEDS: Seed[] = [
   {
@@ -427,6 +433,7 @@ export const SEED_INCIDENTS: Incident[] = SEEDS.map(({ ago, ...s }, i) => ({
   createdAt: now - ago * MIN,
   incidentAt: now - (ago + 10 + i * 3) * MIN,
   editedAt: s.isEdited ? now - (ago - 8) * MIN : undefined,
+  viewerState: { vote: null, hasFlagged: false },
 }));
 
 /** Demo credentials so the tracking screen can be tried right away. */

@@ -21,6 +21,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Local agent/tooling metadata
+MamladibeBackend/.agents/
+MamladibeBackend/.codex/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

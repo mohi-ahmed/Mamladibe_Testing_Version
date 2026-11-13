@@ -5,21 +5,19 @@ import { toast } from "sonner";
 import { CaseSlip } from "@/components/mamla/CaseSlip";
 import { MapFrame } from "@/components/mamla/MapFrame";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
+import { Turnstile } from "@/components/mamla/Turnstile";
 import { Button } from "@/components/ui/button";
+import { api, apiMessage } from "@/lib/api";
 import {
   CATEGORIES,
   RULES,
   bn,
   categoryById,
   formatDateTime,
-  generateSecret,
-  generateTrackingId,
   isInBangladesh,
-  nearestArea,
   type CategoryId,
   type Incident,
 } from "@/lib/incidents";
-import { publishReport } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/report")({
@@ -60,23 +58,30 @@ function ReportPage() {
   const [description, setDescription] = useState("");
   const [when, setWhen] = useState("");
   const [tip, setTip] = useState("");
-  const [human, setHuman] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [publishing, setPublishing] = useState(false);
   const [touched, setTouched] = useState(false);
   const [done, setDone] = useState<{ incident: Incident; secret: string } | null>(null);
   const [locating, setLocating] = useState(false);
 
   useEffect(() => setWhen(toLocalInput(Date.now())), []);
 
-  const pick = (p: { lat: number; lng: number }) => {
+  const pick = async (p: { lat: number; lng: number }) => {
     if (!isInBangladesh(p.lat, p.lng)) {
       toast.error("লোকেশনটি বাংলাদেশের বাইরে। বাংলাদেশের ভেতরে পিন দিন।");
       return;
     }
     setPoint(p);
-    // reverse geocode once, after the pin is placed (UI demo: nearest known area)
-    const a = nearestArea(p.lat, p.lng);
-    setArea(`${a.name}, ঢাকা`);
-    setRoad(a.road);
+    setArea("");
+    setRoad("");
+    try {
+      const { location } = await api.reverseGeocode(p.lat, p.lng);
+      setArea(location.areaName);
+      setRoad(location.roadName);
+    } catch {
+      toast.warning("এলাকার নাম পাওয়া যায়নি। রাস্তা ও এলাকার নাম লিখে দিন।");
+    }
   };
 
   const useGps = () => {
@@ -112,39 +117,42 @@ function ReportPage() {
     tip: tip.length > RULES.tipMax ? "সর্বোচ্চ ৫০০ অক্ষর" : null,
   };
   const detailsOk = !errors.title && !errors.description && !errors.when && !errors.tip;
-  const canNext = [Boolean(category), Boolean(point), detailsOk, human][step];
+  const canNext = [
+    Boolean(category),
+    Boolean(point && area.trim()),
+    detailsOk,
+    Boolean(captchaToken),
+  ][step];
 
   const next = () => {
     if (step === 2 && !detailsOk) return setTouched(true);
     if (canNext) setStep((s) => Math.min(3, s + 1));
   };
 
-  const publish = () => {
-    if (!category || !point || !detailsOk || !human) return;
-    const now = Date.now();
-    const trackingId = generateTrackingId();
-    const secret = generateSecret();
-    const incident: Incident = {
-      id: trackingId.toLowerCase(),
-      trackingId,
-      title: title.trim(),
-      description: description.trim(),
-      category,
-      lat: point.lat,
-      lng: point.lng,
-      roadName: road.trim(),
-      areaName: area,
-      incidentAt: whenTs,
-      createdAt: now,
-      safetyTip: tip.trim() || undefined,
-      support: 0,
-      dispute: 0,
-      flags: 0,
-      commentCount: 0,
-    };
-    publishReport(incident, secret);
-    setDone({ incident, secret });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const publish = async () => {
+    if (!category || !point || !detailsOk || !captchaToken || !area.trim()) return;
+    setPublishing(true);
+    try {
+      const result = await api.createIncident({
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        incidentAt: new Date(whenTs).toISOString(),
+        lat: point.lat,
+        lng: point.lng,
+        roadName: road.trim(),
+        areaName: area.trim(),
+        ...(tip.trim() ? { safetyTip: tip.trim() } : {}),
+        captchaToken,
+      });
+      setDone({ incident: result.incident, secret: result.credentials.secret });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      toast.error(apiMessage(error));
+      setCaptchaReset((value) => value + 1);
+    } finally {
+      setPublishing(false);
+    }
   };
 
   if (done) {
@@ -251,13 +259,18 @@ function ReportPage() {
             </div>
             {point ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-border bg-background/60 p-3">
-                  <div className="text-xs text-muted-foreground">এলাকা</div>
+                <label className="rounded-xl border border-border bg-background/60 p-3">
+                  <span className="text-xs text-muted-foreground">এলাকা</span>
                   <div className="mt-0.5 flex items-center gap-1.5 font-semibold">
                     <MapPin className="h-4 w-4 text-primary" />
-                    {area}
+                    <input
+                      value={area}
+                      onChange={(e) => setArea(e.target.value)}
+                      placeholder="এলাকার নাম লিখুন"
+                      className="w-full bg-transparent outline-none placeholder:font-normal placeholder:text-muted-foreground"
+                    />
                   </div>
-                </div>
+                </label>
                 <label className="rounded-xl border border-border bg-background/60 p-3">
                   <span className="text-xs text-muted-foreground">
                     রাস্তার নাম {road ? "" : "(খুঁজে পাওয়া যায়নি — লিখে দিন)"}
@@ -374,19 +387,12 @@ function ReportPage() {
               প্রকাশের পর ক্যাটাগরি, লোকেশন ও সময় বদলানো যাবে না। প্রথম ১৫ মিনিট শুধু বানান বা ছোট
               ভুল ঠিক করা যাবে।
             </div>
-            <label className="mt-6 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-border bg-background/60 p-4 has-[:checked]:border-signal-green">
-              <input
-                type="checkbox"
-                checked={human}
-                onChange={(e) => setHuman(e.target.checked)}
-                className="h-5 w-5 accent-[color:var(--signal-green)]"
-              />
-              <span className="font-semibold">আমি রোবট নই</span>
-              <ShieldCheck className="ml-auto h-5 w-5 text-signal-green" />
-              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                CAPTCHA demo
-              </span>
-            </label>
+            <div className="mt-6 rounded-xl border-2 border-border bg-background/60 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <ShieldCheck className="h-5 w-5 text-signal-green" /> মানব যাচাই
+              </div>
+              <Turnstile onToken={setCaptchaToken} resetKey={captchaReset} />
+            </div>
           </div>
         )}
 
@@ -403,8 +409,13 @@ function ReportPage() {
               পরের ধাপ <ArrowRight />
             </Button>
           ) : (
-            <Button variant="road" size="lg" onClick={publish} disabled={!human}>
-              প্রকাশ করুন <ArrowRight />
+            <Button
+              variant="road"
+              size="lg"
+              onClick={publish}
+              disabled={!captchaToken || publishing}
+            >
+              {publishing ? "প্রকাশ হচ্ছে..." : "প্রকাশ করুন"} <ArrowRight />
             </Button>
           )}
         </div>

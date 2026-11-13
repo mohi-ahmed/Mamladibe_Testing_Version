@@ -4,16 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
 import { Button } from "@/components/ui/button";
-import {
-  DEMO_TRACKING,
-  RULES,
-  bn,
-  categoryById,
-  changeRatio,
-  formatDateTime,
-  type Incident,
-} from "@/lib/incidents";
-import { lookupReport, saveQuickEdit, useIncident, useVersions } from "@/lib/store";
+import { api, apiMessage, type TrackResult } from "@/lib/api";
+import { RULES, bn, categoryById, changeRatio, formatDateTime } from "@/lib/incidents";
 
 export const Route = createFileRoute("/track")({
   head: () => ({
@@ -40,19 +32,23 @@ export const Route = createFileRoute("/track")({
 function TrackPage() {
   const [tid, setTid] = useState("");
   const [secret, setSecret] = useState("");
-  const [foundId, setFoundId] = useState<string | null>(null);
+  const [found, setFound] = useState<TrackResult | null>(null);
   const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const r = lookupReport(tid, secret);
-    if (!r) {
+    setLoading(true);
+    try {
+      const result = await api.track(tid, secret);
+      setError(false);
+      setFound(result);
+    } catch {
       setError(true);
-      setFoundId(null);
-      return;
+      setFound(null);
+    } finally {
+      setLoading(false);
     }
-    setError(false);
-    setFoundId(r.id);
   };
 
   return (
@@ -105,30 +101,23 @@ function TrackPage() {
             variant="road"
             size="lg"
             className="mt-5 w-full"
-            disabled={!tid || !secret}
+            disabled={!tid || !secret || loading}
           >
-            রিপোর্ট খুঁজুন
+            {loading ? "খোঁজা হচ্ছে..." : "রিপোর্ট খুঁজুন"}
           </Button>
           <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
             Secret হারিয়ে গেলে পুনরুদ্ধার করা যায় না — আমরাও জানি না, কারণ এটি কোথাও সাধারণ লেখায়
             সংরক্ষণ করা হয় না।
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              setTid(DEMO_TRACKING.trackingId);
-              setSecret(DEMO_TRACKING.secret);
-            }}
-            className="mt-4 w-full rounded-xl border border-dashed border-primary/50 p-3 text-left text-xs text-muted-foreground hover:border-primary"
-          >
-            <span className="font-semibold text-primary">ডেমো চেষ্টা করুন →</span> নমুনা স্লিপ
-            বসিয়ে দিন
-          </button>
         </form>
 
         <div>
-          {foundId ? (
-            <Tracked id={foundId} />
+          {found ? (
+            <TrackedView
+              result={found}
+              secret={secret}
+              onUpdated={async () => setFound(await api.track(found.incident.trackingId, secret))}
+            />
           ) : (
             <div className="grid h-full min-h-[320px] place-items-center rounded-[1.75rem] border border-dashed border-border p-10 text-center">
               <div>
@@ -157,18 +146,21 @@ function useNow(ms = 1000) {
   return now;
 }
 
-function Tracked({ id }: { id: string }) {
-  const incident = useIncident(id);
-  if (!incident) return null;
-  return <TrackedView incident={incident} />;
-}
-
-function TrackedView({ incident }: { incident: Incident }) {
+function TrackedView({
+  result,
+  secret,
+  onUpdated,
+}: {
+  result: TrackResult;
+  secret: string;
+  onUpdated: () => Promise<void>;
+}) {
+  const incident = result.incident;
   const now = useNow();
-  const versions = useVersions(incident.id);
-  const deadline = incident.createdAt + RULES.quickEditMinutes * 60_000;
+  const versions = result.versions;
+  const deadline = result.edit.deadline;
   const left = Math.max(0, deadline - now);
-  const open = left > 0;
+  const open = result.edit.allowed && left > 0;
   const mm = Math.floor(left / 60000);
   const ss = Math.floor((left % 60000) / 1000);
   const pct = (left / (RULES.quickEditMinutes * 60_000)) * 100;
@@ -184,7 +176,7 @@ function TrackedView({ incident }: { incident: Incident }) {
   const valid = title.trim().length >= RULES.titleMin && description.trim().length >= RULES.descMin;
   const changed = original !== edited;
 
-  const save = () => {
+  const save = async () => {
     if (!open) {
       toast.error("১৫ মিনিটের সময়সীমা শেষ। আর সম্পাদনা করা যাবে না।");
       return;
@@ -193,12 +185,18 @@ function TrackedView({ incident }: { incident: Incident }) {
       toast.error("অনেক বেশি পরিবর্তন। শুধু ছোট ভুল ঠিক করা যাবে।");
       return;
     }
-    saveQuickEdit(incident, {
-      title: title.trim(),
-      description: description.trim(),
-      safetyTip: tip.trim() || undefined,
-    });
-    toast.success("সংশোধন সংরক্ষিত হয়েছে। রিপোর্টে 'সম্পাদিত' লেবেল দেখাবে।");
+    try {
+      await api.editIncident(incident.trackingId, {
+        secret,
+        title: title.trim(),
+        description: description.trim(),
+        ...(tip.trim() ? { safetyTip: tip.trim() } : {}),
+      });
+      await onUpdated();
+      toast.success("সংশোধন সংরক্ষিত হয়েছে। রিপোর্টে 'সম্পাদিত' লেবেল দেখাবে।");
+    } catch (requestError) {
+      toast.error(apiMessage(requestError));
+    }
   };
 
   return (

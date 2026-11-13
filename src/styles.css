@@ -5,6 +5,7 @@
 @source "../src";
 @import "tw-animate-css";
 @import "leaflet/dist/leaflet.css";
+@import "leaflet.markercluster/dist/MarkerCluster.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -423,6 +424,29 @@
   background: transparent;
   border: 0;
 }
+.mamla-cluster {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+}
+.mamla-cluster__count {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 3px solid var(--primary-foreground);
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow:
+    0 0 0 6px color-mix(in oklab, var(--primary) 24%, transparent),
+    0 8px 18px oklch(0 0 0 / 0.55);
+  color: var(--primary-foreground);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1;
+}
 
 /* Form field on asphalt */
 @utility input-road {
@@ -460,5 +484,79 @@
     height: 3px;
     border-radius: 2px;
     background: var(--primary);
+  }
+}
+
+/* Admin console skin mirrors the approved interactive control-center demo. */
+.admin-surface {
+  --background: #0c1114;
+  --foreground: #eef0e8;
+  --card: #161e20;
+  --card-foreground: #eef0e8;
+  --muted: #1d2527;
+  --muted-foreground: #82908b;
+  --border: #2e383a;
+  --input: #435050;
+  --accent: #1a2325;
+  --accent-foreground: #eef0e8;
+  --primary: #f3d54e;
+  --primary-foreground: #111814;
+  background: #0c1114;
+  font-family: var(--font-sans);
+}
+
+.admin-surface table {
+  min-width: 700px;
+  border-collapse: collapse;
+}
+
+.admin-surface thead tr {
+  border: 0;
+}
+
+.admin-surface th {
+  height: auto;
+  padding: 14px 16px;
+  background: #1d2527;
+  color: #7f928a;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-surface td {
+  padding: 15px 16px;
+  border-top: 1px solid #293336;
+  color: #dbe0d9;
+  font-size: 11px;
+}
+
+.admin-surface tbody tr {
+  border: 0;
+}
+
+.admin-surface tbody tr:hover td {
+  background: #1b2426;
+}
+
+.admin-surface main > div.border,
+.admin-surface main > section.border,
+.admin-surface main .bg-card\/45,
+.admin-surface main .bg-card\/50 {
+  border-color: #2e383a;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #161e20, #131a1d);
+  overflow: hidden;
+  box-shadow: 0 15px 38px #0000001f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-surface *,
+  .admin-surface *::before,
+  .admin-surface *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
   }
 }

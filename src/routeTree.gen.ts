@@ -10,15 +10,32 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as ReportRouteImport } from './routes/report'
 import { Route as TrackRouteImport } from './routes/track'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminActivityRouteImport } from './routes/admin.activity'
+import { Route as AdminAuditRouteImport } from './routes/admin.audit'
+import { Route as AdminBlocksRouteImport } from './routes/admin.blocks'
+import { Route as AdminCommentsRouteImport } from './routes/admin.comments'
+import { Route as AdminEnrolRouteImport } from './routes/admin.enrol'
+import { Route as AdminFlagsRouteImport } from './routes/admin.flags'
+import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
+import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as IncidentsIndexRouteImport } from './routes/incidents.index'
 import { Route as IncidentsIdRouteImport } from './routes/incidents.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MapRoute = MapRouteImport.update({
@@ -36,6 +53,61 @@ const TrackRoute = TrackRouteImport.update({
   path: '/track',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminActivityRoute = AdminActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAuditRoute = AdminAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBlocksRoute = AdminBlocksRouteImport.update({
+  id: '/blocks',
+  path: '/blocks',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCommentsRoute = AdminCommentsRouteImport.update({
+  id: '/comments',
+  path: '/comments',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEnrolRoute = AdminEnrolRouteImport.update({
+  id: '/enrol',
+  path: '/enrol',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFlagsRoute = AdminFlagsRouteImport.update({
+  id: '/flags',
+  path: '/flags',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminIncidentsRoute = AdminIncidentsRouteImport.update({
+  id: '/incidents',
+  path: '/incidents',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
 const IncidentsIndexRoute = IncidentsIndexRouteImport.update({
   id: '/incidents/',
   path: '/incidents/',
@@ -49,10 +121,22 @@ const IncidentsIdRoute = IncidentsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/map': typeof MapRoute
   '/report': typeof ReportRoute
   '/track': typeof TrackRoute
+  '/admin/activity': typeof AdminActivityRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/blocks': typeof AdminBlocksRoute
+  '/admin/comments': typeof AdminCommentsRoute
+  '/admin/enrol': typeof AdminEnrolRoute
+  '/admin/flags': typeof AdminFlagsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/incidents/$id': typeof IncidentsIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/incidents/': typeof IncidentsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -60,36 +144,106 @@ export interface FileRoutesByTo {
   '/map': typeof MapRoute
   '/report': typeof ReportRoute
   '/track': typeof TrackRoute
+  '/admin/activity': typeof AdminActivityRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/blocks': typeof AdminBlocksRoute
+  '/admin/comments': typeof AdminCommentsRoute
+  '/admin/enrol': typeof AdminEnrolRoute
+  '/admin/flags': typeof AdminFlagsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/incidents/$id': typeof IncidentsIdRoute
+  '/admin': typeof AdminIndexRoute
   '/incidents': typeof IncidentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/map': typeof MapRoute
   '/report': typeof ReportRoute
   '/track': typeof TrackRoute
+  '/admin/activity': typeof AdminActivityRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/blocks': typeof AdminBlocksRoute
+  '/admin/comments': typeof AdminCommentsRoute
+  '/admin/enrol': typeof AdminEnrolRoute
+  '/admin/flags': typeof AdminFlagsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/incidents/$id': typeof IncidentsIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/incidents/': typeof IncidentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/map' | '/report' | '/track' | '/incidents/$id' | '/incidents/'
+    | '/'
+    | '/admin'
+    | '/map'
+    | '/report'
+    | '/track'
+    | '/admin/activity'
+    | '/admin/audit'
+    | '/admin/blocks'
+    | '/admin/comments'
+    | '/admin/enrol'
+    | '/admin/flags'
+    | '/admin/incidents'
+    | '/admin/login'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/incidents/$id'
+    | '/admin/'
+    | '/incidents/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/map' | '/report' | '/track' | '/incidents/$id' | '/incidents'
-  id:
-    | '__root__'
+  to:
     | '/'
     | '/map'
     | '/report'
     | '/track'
+    | '/admin/activity'
+    | '/admin/audit'
+    | '/admin/blocks'
+    | '/admin/comments'
+    | '/admin/enrol'
+    | '/admin/flags'
+    | '/admin/incidents'
+    | '/admin/login'
+    | '/admin/settings'
+    | '/admin/users'
     | '/incidents/$id'
+    | '/admin'
+    | '/incidents'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/map'
+    | '/report'
+    | '/track'
+    | '/admin/activity'
+    | '/admin/audit'
+    | '/admin/blocks'
+    | '/admin/comments'
+    | '/admin/enrol'
+    | '/admin/flags'
+    | '/admin/incidents'
+    | '/admin/login'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/incidents/$id'
+    | '/admin/'
     | '/incidents/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   MapRoute: typeof MapRoute
   ReportRoute: typeof ReportRoute
   TrackRoute: typeof TrackRoute
@@ -104,6 +258,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/map': {
@@ -127,6 +288,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/activity': {
+      id: '/admin/activity'
+      path: '/activity'
+      fullPath: '/admin/activity'
+      preLoaderRoute: typeof AdminActivityRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/audit': {
+      id: '/admin/audit'
+      path: '/audit'
+      fullPath: '/admin/audit'
+      preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/blocks': {
+      id: '/admin/blocks'
+      path: '/blocks'
+      fullPath: '/admin/blocks'
+      preLoaderRoute: typeof AdminBlocksRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/comments': {
+      id: '/admin/comments'
+      path: '/comments'
+      fullPath: '/admin/comments'
+      preLoaderRoute: typeof AdminCommentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/enrol': {
+      id: '/admin/enrol'
+      path: '/enrol'
+      fullPath: '/admin/enrol'
+      preLoaderRoute: typeof AdminEnrolRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/flags': {
+      id: '/admin/flags'
+      path: '/flags'
+      fullPath: '/admin/flags'
+      preLoaderRoute: typeof AdminFlagsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/incidents': {
+      id: '/admin/incidents'
+      path: '/incidents'
+      fullPath: '/admin/incidents'
+      preLoaderRoute: typeof AdminIncidentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/incidents/': {
       id: '/incidents/'
       path: '/incidents'
@@ -144,8 +382,39 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminActivityRoute: typeof AdminActivityRoute
+  AdminAuditRoute: typeof AdminAuditRoute
+  AdminBlocksRoute: typeof AdminBlocksRoute
+  AdminCommentsRoute: typeof AdminCommentsRoute
+  AdminEnrolRoute: typeof AdminEnrolRoute
+  AdminFlagsRoute: typeof AdminFlagsRoute
+  AdminIncidentsRoute: typeof AdminIncidentsRoute
+  AdminLoginRoute: typeof AdminLoginRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminActivityRoute: AdminActivityRoute,
+  AdminAuditRoute: AdminAuditRoute,
+  AdminBlocksRoute: AdminBlocksRoute,
+  AdminCommentsRoute: AdminCommentsRoute,
+  AdminEnrolRoute: AdminEnrolRoute,
+  AdminFlagsRoute: AdminFlagsRoute,
+  AdminIncidentsRoute: AdminIncidentsRoute,
+  AdminLoginRoute: AdminLoginRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   MapRoute: MapRoute,
   ReportRoute: ReportRoute,
   TrackRoute: TrackRoute,

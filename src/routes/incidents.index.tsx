@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search, X } from "lucide-react";
+import { useDeferredValue, useMemo } from "react";
 import { CategoryFilter } from "@/components/mamla/CategoryFilter";
 import { IncidentCard } from "@/components/mamla/IncidentCard";
 import { Button } from "@/components/ui/button";
+import { apiMessage } from "@/lib/api";
 import { CATEGORIES, RULES, bn, type CategoryId } from "@/lib/incidents";
-import { useIncidents } from "@/lib/store";
+import { useIncidentList } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type Range = "all" | "today" | "7d" | "30d";
@@ -53,23 +55,27 @@ export const Route = createFileRoute("/incidents/")({
 function IncidentsPage() {
   const { q = "", category, range = "all", page = 1 } = Route.useSearch();
   const navigate = useNavigate({ from: "/incidents/" });
-  const all = useIncidents();
+  const deferredQuery = useDeferredValue(q.trim());
+  const from = useMemo(() => {
+    const rangeMs = RANGES.find((item) => item.id === range)!.ms;
+    return Number.isFinite(rangeMs) ? new Date(Date.now() - rangeMs).toISOString() : undefined;
+  }, [range]);
+  const incidentQuery = useIncidentList({
+    ...(deferredQuery ? { q: deferredQuery } : {}),
+    ...(category ? { category } : {}),
+    ...(from ? { from } : {}),
+    page,
+    pageSize: RULES.pageSize,
+    sort: "newest",
+  });
+  const shown = incidentQuery.data?.items ?? [];
+  const totalItems = incidentQuery.data?.pagination.totalItems ?? 0;
+  const pages = incidentQuery.data?.pagination.totalPages ?? 0;
   const set = (patch: Partial<SearchParams>) =>
     navigate({
       search: (prev: SearchParams) => ({ ...prev, page: undefined, ...patch }),
       replace: true,
     });
-
-  const rangeMs = RANGES.find((r) => r.id === range)!.ms;
-  const needle = q.trim().toLowerCase();
-  const filtered = all.filter(
-    (i) =>
-      (!category || i.category === category) &&
-      Date.now() - i.createdAt <= rangeMs &&
-      (!needle || `${i.roadName} ${i.areaName} ${i.title}`.toLowerCase().includes(needle)),
-  );
-  const pages = Math.max(1, Math.ceil(filtered.length / RULES.pageSize));
-  const shown = filtered.slice((page - 1) * RULES.pageSize, page * RULES.pageSize);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-10 sm:px-6">
@@ -121,9 +127,11 @@ function IncidentsPage() {
 
       <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
         <span>
-          <b className="text-foreground">{bn(filtered.length)}</b> টি ঘটনা পাওয়া গেছে
+          <b className="text-foreground">{bn(totalItems)}</b> টি ঘটনা পাওয়া গেছে
         </span>
-        <span className="font-mono text-xs">সর্বশেষ আগে</span>
+        <span className="font-mono text-xs">
+          {incidentQuery.isFetching ? "খোঁজা হচ্ছে..." : "সর্বশেষ আগে"}
+        </span>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -131,7 +139,19 @@ function IncidentsPage() {
           <IncidentCard key={i.id} incident={i} index={idx} />
         ))}
       </div>
-      {filtered.length === 0 && (
+      {incidentQuery.isPending && (
+        <div className="mt-4 h-52 animate-pulse rounded-2xl bg-card" aria-label="লোড হচ্ছে" />
+      )}
+      {incidentQuery.isError && (
+        <div className="mt-4 rounded-2xl border border-flag/50 bg-flag/10 p-8 text-center">
+          <p className="font-semibold">ঘটনাগুলো লোড করা যায়নি</p>
+          <p className="mt-1 text-sm text-muted-foreground">{apiMessage(incidentQuery.error)}</p>
+          <Button variant="asphalt" className="mt-4" onClick={() => incidentQuery.refetch()}>
+            আবার চেষ্টা করুন
+          </Button>
+        </div>
+      )}
+      {!incidentQuery.isPending && !incidentQuery.isError && shown.length === 0 && (
         <div className="mt-4 rounded-2xl border border-dashed border-border p-14 text-center">
           <p className="text-lg font-semibold">কিছু পাওয়া যায়নি</p>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -146,7 +166,7 @@ function IncidentsPage() {
           </Button>
         </div>
       )}
-      {pages > 1 && (
+      {!incidentQuery.isError && pages > 1 && (
         <div className="mt-8 flex justify-center gap-2">
           {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
             <Button

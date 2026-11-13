@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useHydrated } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
   CalendarClock,
@@ -15,7 +15,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { MapFrame } from "@/components/mamla/MapFrame";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
+import { Turnstile } from "@/components/mamla/Turnstile";
 import { Button } from "@/components/ui/button";
+import { apiMessage } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -40,13 +42,12 @@ import {
 import {
   addComment,
   castVote,
-  commentsLeftToday,
   flagComment,
   flagIncident,
   useComments,
-  useIncident,
+  useIncidentQuery,
   useMyVote,
-  useStore,
+  useRefreshIncident,
 } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -71,13 +72,13 @@ export const Route = createFileRoute("/incidents/$id")({
 
 function IncidentPage() {
   const { id } = Route.useParams();
-  const incident = useIncident(id);
-  const hydrated = useHydrated();
+  const query = useIncidentQuery(id);
+  const incident = query.data;
 
   if (!incident) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-24 text-center">
-        {hydrated ? (
+        {query.isError ? (
           <>
             <RoadSign category="other" size={72} className="mx-auto" />
             <h1 className="mt-6 text-3xl font-extrabold">এই ঘটনাটি খুঁজে পাওয়া যায়নি</h1>
@@ -100,6 +101,16 @@ function IncidentPage() {
 function IncidentView({ incident }: { incident: Incident }) {
   const cat = categoryById(incident.category);
   const vote = useMyVote(incident.id);
+  const refresh = useRefreshIncident();
+
+  const voteFor = async (kind: "support" | "dispute") => {
+    try {
+      await castVote(incident, kind);
+      await refresh(incident.trackingId);
+    } catch (error) {
+      toast.error(apiMessage(error));
+    }
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6" style={catStyle(incident.category)}>
@@ -176,13 +187,13 @@ function IncidentView({ incident }: { incident: Incident }) {
                 active={vote === "support"}
                 kind="support"
                 count={incident.support}
-                onClick={() => castVote(incident.id, "support")}
+                onClick={() => void voteFor("support")}
               />
               <VoteButton
                 active={vote === "dispute"}
                 kind="dispute"
                 count={incident.dispute}
-                onClick={() => castVote(incident.id, "dispute")}
+                onClick={() => void voteFor("dispute")}
               />
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
@@ -205,7 +216,12 @@ function IncidentView({ incident }: { incident: Incident }) {
               <span className="inline-flex items-center gap-1.5">
                 <MessageCircle className="h-3.5 w-3.5" /> {bn(incident.commentCount)} মন্তব্য
               </span>
-              <FlagDialog target="incident" id={incident.id} />
+              <FlagDialog
+                target="incident"
+                id={incident.trackingId}
+                already={incident.viewerState.hasFlagged}
+                onDone={() => refresh(incident.trackingId)}
+              />
             </div>
           </div>
 
@@ -242,6 +258,7 @@ function VoteButton({
     <button
       onClick={onClick}
       aria-pressed={active}
+      data-testid={`vote-${kind}`}
       className={cn(
         "group flex flex-col items-start gap-2 rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.97]",
         isS
@@ -274,23 +291,30 @@ function FlagDialog({
   target,
   id,
   compact,
+  already = false,
+  onDone,
 }: {
   target: "incident" | "comment";
   id: string;
   compact?: boolean;
+  already?: boolean;
+  onDone?: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
-  const store = useStore();
-  const already =
-    target === "incident" ? Boolean(store.flags[id]) : Boolean(store.commentFlags[id]);
   const reasons = target === "incident" ? INCIDENT_FLAG_REASONS : COMMENT_FLAG_REASONS;
 
-  const submit = () => {
+  const submit = async () => {
     if (!reason) return;
-    const r = target === "incident" ? flagIncident(id, reason) : flagComment(id, reason);
-    (r.ok ? toast.success : toast.error)(r.message);
-    setOpen(false);
+    try {
+      if (target === "incident") await flagIncident(id, reason);
+      else await flagComment(id, reason);
+      toast.success("ফ্ল্যাগটি পর্যালোচনার জন্য পাঠানো হয়েছে।");
+      setOpen(false);
+      await onDone?.();
+    } catch (error) {
+      toast.error(apiMessage(error));
+    }
   };
 
   return (
@@ -340,12 +364,13 @@ function FlagDialog({
 
 function Comments({ incidentId }: { incidentId: string }) {
   const comments = useComments(incidentId);
-  useStore();
+  const refresh = useRefreshIncident();
   const [type, setType] = useState<CommentType>("extra");
   const [text, setText] = useState("");
   const [page, setPage] = useState(1);
-  const hydrated = useHydrated();
-  const left = hydrated ? commentsLeftToday() : RULES.commentsPerDay;
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const trimmed = text.trim();
   const error =
     trimmed.length > 0 && trimmed.length < RULES.commentMin
@@ -355,12 +380,21 @@ function Comments({ incidentId }: { incidentId: string }) {
         : null;
   const shown = comments.slice(0, page * RULES.commentsPageSize);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (error || trimmed.length < RULES.commentMin) return;
-    const r = addComment({ incidentId, type, text: trimmed });
-    (r.ok ? toast.success : toast.error)(r.message);
-    if (r.ok) setText("");
+    if (error || trimmed.length < RULES.commentMin || !captchaToken) return;
+    setSubmitting(true);
+    try {
+      const result = await addComment(incidentId, { type, text: trimmed, captchaToken });
+      toast.success(`মন্তব্য যোগ হয়েছে। আজ আরও ${result.quota.remaining}টি করা যাবে।`);
+      setText("");
+      await refresh(incidentId);
+    } catch (requestError) {
+      toast.error(apiMessage(requestError));
+    } finally {
+      setSubmitting(false);
+      setCaptchaReset((value) => value + 1);
+    }
   };
 
   return (
@@ -396,7 +430,15 @@ function Comments({ incidentId }: { incidentId: string }) {
                 <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                   <span>কমিউনিটির মন্তব্য। যাচাই করা নয়।</span>
                   <span className="flex items-center gap-4">
-                    {!c.mine && <FlagDialog target="comment" id={c.id} compact />}
+                    {!c.mine && (
+                      <FlagDialog
+                        target="comment"
+                        id={c.id}
+                        compact
+                        already={Boolean(c.hasFlagged)}
+                        onDone={() => refresh(incidentId)}
+                      />
+                    )}
                   </span>
                 </div>
               </li>
@@ -438,6 +480,7 @@ function Comments({ incidentId }: { incidentId: string }) {
           ))}
         </div>
         <textarea
+          data-testid="comment-input"
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, RULES.commentMax))}
           rows={4}
@@ -450,16 +493,22 @@ function Comments({ incidentId }: { incidentId: string }) {
             {bn(text.length)}/{bn(RULES.commentMax)}
           </span>
         </div>
+        <Turnstile
+          onToken={setCaptchaToken}
+          resetKey={captchaReset}
+          className="mt-3 overflow-hidden"
+        />
         <Button
+          data-testid="comment-submit"
           type="submit"
           variant="road"
           className="mt-3 w-full"
-          disabled={!!error || trimmed.length < RULES.commentMin || left === 0}
+          disabled={!!error || trimmed.length < RULES.commentMin || !captchaToken || submitting}
         >
-          মন্তব্য পাঠান
+          {submitting ? "পাঠানো হচ্ছে..." : "মন্তব্য পাঠান"}
         </Button>
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          আজ আর {bn(left)}টি মন্তব্য করতে পারবেন · লিংক দেওয়া যাবে না
+          প্রতিদিন সর্বোচ্চ {bn(RULES.commentsPerDay)}টি মন্তব্য · লিংক দেওয়া যাবে না
         </p>
       </form>
     </section>

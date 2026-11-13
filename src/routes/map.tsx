@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowUpRight, MapPin, ThumbsDown, ThumbsUp, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { CategoryFilter } from "@/components/mamla/CategoryFilter";
 import { MapFrame } from "@/components/mamla/MapFrame";
+import type { MapBounds } from "@/components/mamla/IncidentMap";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
 import { Button } from "@/components/ui/button";
+import { apiMessage } from "@/lib/api";
 import { CATEGORIES, bn, categoryById, timeAgo, type CategoryId } from "@/lib/incidents";
-import { useIncidents } from "@/lib/store";
+import { useIncidentList } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/map")({
@@ -30,11 +32,41 @@ export const Route = createFileRoute("/map")({
 });
 
 function MapPage() {
-  const all = useIncidents();
   const [cat, setCat] = useState<CategoryId | "all">("all");
   const [selected, setSelected] = useState<string | null>(null);
-  const list = useMemo(() => all.filter((i) => cat === "all" || i.category === cat), [all, cat]);
+  const [bounds, setBounds] = useState<MapBounds | null>(null);
+  const incidentQuery = useIncidentList(
+    bounds
+      ? {
+          ...bounds,
+          ...(cat !== "all" ? { category: cat } : {}),
+          page: 1,
+          pageSize: 100,
+          sort: "newest",
+        }
+      : { page: 1, pageSize: 100, sort: "newest" },
+    { enabled: Boolean(bounds) },
+  );
+  const list = incidentQuery.data?.items ?? [];
+  const totalItems = incidentQuery.data?.pagination.totalItems ?? 0;
   const sel = list.find((i) => i.id === selected) ?? null;
+  const handleBoundsChange = useCallback((next: MapBounds) => {
+    const rounded = {
+      minLat: Number(next.minLat.toFixed(5)),
+      minLng: Number(next.minLng.toFixed(5)),
+      maxLat: Number(next.maxLat.toFixed(5)),
+      maxLng: Number(next.maxLng.toFixed(5)),
+    };
+    setBounds((current) =>
+      current &&
+      current.minLat === rounded.minLat &&
+      current.minLng === rounded.minLng &&
+      current.maxLat === rounded.maxLat &&
+      current.maxLng === rounded.maxLng
+        ? current
+        : rounded,
+    );
+  }, []);
 
   return (
     <div className="mx-auto max-w-[1600px] px-3 pt-4 sm:px-6">
@@ -44,7 +76,13 @@ function MapPage() {
           <div className="pb-4">
             <p className="eyebrow">ম্যাপে খুঁজুন</p>
             <h1 className="mt-1 text-3xl font-extrabold">লাইভ ম্যাপ</h1>
-            <p className="mt-1 text-sm text-muted-foreground">পিনে চাপ দিন, বিস্তারিত দেখুন।</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {incidentQuery.isFetching
+                ? "এই এলাকার ঘটনা খোঁজা হচ্ছে..."
+                : totalItems > list.length
+                  ? `দৃশ্যমান এলাকায় ${bn(totalItems)}টি · ম্যাপে সর্বশেষ ${bn(list.length)}টি`
+                  : `দৃশ্যমান এলাকায় ${bn(totalItems)}টি ঘটনা`}
+            </p>
           </div>
           <div className="-mr-2 flex-1 space-y-2 overflow-y-auto pr-2">
             {list.map((i) => (
@@ -68,12 +106,36 @@ function MapPage() {
                 </span>
               </button>
             ))}
+            {incidentQuery.isError && (
+              <div className="rounded-2xl border border-flag/50 bg-flag/10 p-4 text-sm">
+                <p className="font-semibold">ম্যাপের ঘটনা লোড করা যায়নি</p>
+                <p className="mt-1 text-muted-foreground">{apiMessage(incidentQuery.error)}</p>
+                <Button
+                  variant="asphalt"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => incidentQuery.refetch()}
+                >
+                  আবার চেষ্টা করুন
+                </Button>
+              </div>
+            )}
+            {!incidentQuery.isFetching && !incidentQuery.isError && list.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                এই দৃশ্যমান এলাকায় কোনো ঘটনা নেই।
+              </div>
+            )}
           </div>
         </aside>
 
         {/* Map */}
         <div className="relative order-1 h-[64vh] overflow-hidden rounded-[1.75rem] border border-border lg:order-2 lg:h-[calc(100vh-6.5rem)]">
-          <MapFrame incidents={list} selectedId={selected} onSelect={setSelected} />
+          <MapFrame
+            incidents={list}
+            selectedId={selected}
+            onSelect={setSelected}
+            onBoundsChange={handleBoundsChange}
+          />
 
           <div className="pointer-events-none absolute inset-x-3 top-3 z-[500] flex flex-col gap-3">
             <div className="pointer-events-auto rounded-2xl border border-border bg-popover/90 p-2 backdrop-blur">

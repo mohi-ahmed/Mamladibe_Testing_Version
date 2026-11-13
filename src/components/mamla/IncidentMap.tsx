@@ -1,11 +1,36 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
+import markerClusterScriptUrl from "leaflet.markercluster/dist/leaflet.markercluster.js?url";
 import { DHAKA_CENTER, categoryById, type Incident } from "@/lib/incidents";
 import { cn } from "@/lib/utils";
 
 /*
  * Leaflet is imported dynamically inside effects so it never runs during SSR.
  */
+
+let markerClusterLoader: Promise<void> | null = null;
+const DEFAULT_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const DEFAULT_TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+function loadMarkerCluster(L: typeof Leaflet) {
+  if (typeof L.markerClusterGroup === "function") return Promise.resolve();
+  if (markerClusterLoader) return markerClusterLoader;
+
+  (globalThis as typeof globalThis & { L: typeof Leaflet }).L = L;
+  markerClusterLoader = new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = markerClusterScriptUrl;
+    script.dataset["mamlaMarkerCluster"] = "true";
+    script.onload = () => resolve();
+    script.onerror = () => {
+      markerClusterLoader = null;
+      reject(new Error("Failed to load Leaflet marker clustering"));
+    };
+    document.head.append(script);
+  });
+  return markerClusterLoader;
+}
 
 function pinHtml(colorVar: string, selected: boolean, fresh: boolean) {
   const s = selected ? 46 : 34;
@@ -31,10 +56,19 @@ function pickHtml() {
   </div>`;
 }
 
+export interface MapBounds {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+}
+
 interface Props {
   incidents?: Incident[];
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  /** Called after the initial map load and whenever panning/zooming ends. */
+  onBoundsChange?: (bounds: MapBounds) => void;
   /** pick mode: clicking the map places a pin */
   picked?: { lat: number; lng: number } | null;
   onPick?: (p: { lat: number; lng: number }) => void;
@@ -48,6 +82,7 @@ export function IncidentMap({
   incidents = [],
   selectedId,
   onSelect,
+  onBoundsChange,
   picked,
   onPick,
   center = DHAKA_CENTER,
@@ -55,55 +90,101 @@ export function IncidentMap({
   interactive = true,
   className,
 }: Props) {
+  const [tileState, setTileState] = useState<"loading" | "ready" | "error">("loading");
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const LRef = useRef<typeof Leaflet | null>(null);
-  const layerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const layerRef = useRef<Leaflet.MarkerClusterGroup | null>(null);
   const pickRef = useRef<Leaflet.Marker | null>(null);
   const onPickRef = useRef(onPick);
   const onSelectRef = useRef(onSelect);
+  const onBoundsChangeRef = useRef(onBoundsChange);
   onPickRef.current = onPick;
   onSelectRef.current = onSelect;
+  onBoundsChangeRef.current = onBoundsChange;
 
   // init
   useEffect(() => {
     let cancelled = false;
-    import("leaflet").then((mod) => {
-      const L =
-        (mod as unknown as { default?: typeof Leaflet }).default ??
-        (mod as unknown as typeof Leaflet);
-      if (cancelled || !el.current || mapRef.current) return;
-      LRef.current = L;
-      const map = L.map(el.current, {
-        center,
-        zoom,
-        zoomControl: interactive,
-        dragging: interactive,
-        scrollWheelZoom: interactive,
-        doubleClickZoom: interactive,
-        touchZoom: interactive,
-        keyboard: interactive,
-        attributionControl: true,
-        maxBounds: [
-          [20.2, 87.6],
-          [26.9, 93.0],
-        ],
-        minZoom: 7,
+    import("leaflet")
+      .then(async (mod) => {
+        const L =
+          (mod as unknown as { default?: typeof Leaflet }).default ??
+          (mod as unknown as typeof Leaflet);
+
+        // markercluster is a legacy browser plugin. Loading its local UMD asset
+        // as a classic script preserves the global `L` contract that Vite's ESM
+        // dependency pre-bundling cannot provide.
+        await loadMarkerCluster(L);
+        return L;
+      })
+      .then((L) => {
+        if (cancelled || !el.current || mapRef.current) return;
+        LRef.current = L;
+        const map = L.map(el.current, {
+          center,
+          zoom,
+          zoomControl: interactive,
+          dragging: interactive,
+          scrollWheelZoom: interactive,
+          doubleClickZoom: interactive,
+          touchZoom: interactive,
+          keyboard: interactive,
+          attributionControl: true,
+          maxBounds: [
+            [20.2, 87.6],
+            [26.9, 93.0],
+          ],
+          minZoom: 7,
+        });
+        const tileUrl =
+          (import.meta.env["VITE_MAP_TILE_URL"] as string | undefined)?.trim() || DEFAULT_TILE_URL;
+        const attribution =
+          (import.meta.env["VITE_MAP_TILE_ATTRIBUTION"] as string | undefined)?.trim() ||
+          DEFAULT_TILE_ATTRIBUTION;
+        const tiles = L.tileLayer(tileUrl, {
+          attribution,
+          maxZoom: 19,
+          className: "mamla-tiles",
+        });
+        tiles.on("load", () => setTileState("ready"));
+        tiles.on("tileerror", () => setTileState("error"));
+        tiles.addTo(map);
+        layerRef.current = L.markerClusterGroup({
+          chunkedLoading: true,
+          maxClusterRadius: 55,
+          removeOutsideVisibleBounds: true,
+          showCoverageOnHover: false,
+          spiderfyOnMaxZoom: true,
+          iconCreateFunction: (cluster) =>
+            L.divIcon({
+              className: "mamla-cluster",
+              html: `<span class="mamla-cluster__count">${cluster.getChildCount()}</span>`,
+              iconSize: [48, 48],
+            }),
+        }).addTo(map);
+        map.on("click", (e: Leaflet.LeafletMouseEvent) =>
+          onPickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }),
+        );
+        const emitBounds = () => {
+          const bounds = map.getBounds();
+          onBoundsChangeRef.current?.({
+            minLat: bounds.getSouth(),
+            minLng: bounds.getWest(),
+            maxLat: bounds.getNorth(),
+            maxLng: bounds.getEast(),
+          });
+        };
+        map.on("moveend", emitBounds);
+        mapRef.current = map;
+        map.whenReady(emitBounds);
+        // trigger render of markers
+        el.current.dispatchEvent(new Event("mamla:ready"));
+      })
+      .catch((error: unknown) => {
+        setTileState("error");
+        console.error("Failed to initialize incident map", error);
       });
-      // Demo tiles. Production needs a dedicated tile provider (SRS 4.2), not the public OSM server.
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
-        className: "mamla-tiles",
-      }).addTo(map);
-      layerRef.current = L.layerGroup().addTo(map);
-      map.on("click", (e: Leaflet.LeafletMouseEvent) =>
-        onPickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }),
-      );
-      mapRef.current = map;
-      // trigger render of markers
-      el.current.dispatchEvent(new Event("mamla:ready"));
-    });
     return () => {
       cancelled = true;
       mapRef.current?.remove();
@@ -188,9 +269,29 @@ export function IncidentMap({
   }, [picked]);
 
   return (
-    <div
-      ref={el}
-      className={cn("relative z-0 h-full w-full", onPick && "cursor-crosshair", className)}
-    />
+    <div className={cn("relative z-0 h-full w-full", className)}>
+      <div ref={el} className={cn("h-full w-full", onPick && "cursor-crosshair")} />
+      {tileState === "loading" && (
+        <div
+          role="status"
+          data-testid="map-loading"
+          className="pointer-events-none absolute bottom-3 right-3 z-[450] rounded-lg border border-border bg-popover/90 px-3 py-2 text-xs text-muted-foreground backdrop-blur"
+        >
+          মানচিত্র লোড হচ্ছে…
+        </div>
+      )}
+      {tileState === "error" && (
+        <div
+          role="alert"
+          data-testid="map-tile-error"
+          className="absolute inset-x-4 bottom-4 z-[450] rounded-xl border border-flag/50 bg-popover/95 p-3 text-sm shadow-card backdrop-blur"
+        >
+          <p className="font-semibold text-flag">মানচিত্রের রাস্তার স্তর লোড করা যায়নি</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            আপনার সংযোগ পরীক্ষা করে পেজটি আবার লোড করুন। ঘটনার তালিকা ব্যবহার করা যাবে।
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
