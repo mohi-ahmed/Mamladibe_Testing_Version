@@ -65,7 +65,7 @@ function clearSessionCookies(reply: FastifyReply, config: AppConfig) {
   reply.clearCookie(ADMIN_CSRF_COOKIE, options);
 }
 
-export async function registerAdminRoutes(
+export function registerAdminRoutes(
   app: FastifyInstance,
   config: AppConfig,
   rateLimit: RateLimitStore,

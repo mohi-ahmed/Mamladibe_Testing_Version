@@ -5,10 +5,11 @@ import { loadConfig } from "./src/config/env.js";
 import { connectDatabase } from "./src/database/mongoose.js";
 
 const config = loadConfig();
-
-await connectDatabase(config.MONGODB_URI, false);
-
-const app: FastifyInstance = await buildApp({ config });
+const databaseReady = connectDatabase(config.MONGODB_URI, false);
+void databaseReady.catch((error: unknown) => {
+  console.error("MongoDB connection failed", error);
+});
+const app: FastifyInstance = buildApp({ config, databaseReady });
 
 void app.listen({ port: config.PORT, host: config.HOST });
 

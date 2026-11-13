@@ -31,6 +31,7 @@ import { registerAdminRoutes } from "./routes/admin.routes.js";
 
 export interface AppOptions {
   config?: AppConfig;
+  databaseReady?: Promise<unknown>;
   quota?: CommentQuotaStore;
   rateLimit?: RateLimitStore;
   logger?: boolean;
@@ -56,7 +57,7 @@ function createRateLimit(config: AppConfig) {
   return new InMemoryRateLimitStore();
 }
 
-export async function buildApp(options: AppOptions = {}) {
+export function buildApp(options: AppOptions = {}) {
   const config = options.config ?? loadConfig();
   const quota = options.quota ?? createQuota(config);
   const rateLimit = options.rateLimit ?? createRateLimit(config);
@@ -81,9 +82,9 @@ export async function buildApp(options: AppOptions = {}) {
     bodyLimit: 256 * 1_024,
   });
 
-  await app.register(cookie);
-  await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, {
+  app.register(cookie);
+  app.register(helmet, { contentSecurityPolicy: false });
+  app.register(cors, {
     origin: (origin, callback) => {
       if (!origin || config.allowedOrigins.includes(origin)) callback(null, true);
       else callback(null, false);
@@ -91,6 +92,12 @@ export async function buildApp(options: AppOptions = {}) {
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   });
+
+  if (options.databaseReady) {
+    app.addHook("onRequest", async () => {
+      await options.databaseReady;
+    });
+  }
 
   const captcha = new CaptchaService(
     config.TURNSTILE_SECRET,
@@ -107,8 +114,8 @@ export async function buildApp(options: AppOptions = {}) {
     rateLimit,
   };
   const controller = createPublicController(config, services);
-  await registerPublicRoutes(app, config, controller, rateLimit);
-  await registerAdminRoutes(app, config, rateLimit);
+  registerPublicRoutes(app, config, controller, rateLimit);
+  registerAdminRoutes(app, config, rateLimit);
 
   app.setNotFoundHandler((request, reply) => {
     if (request.url.startsWith("/api/")) {

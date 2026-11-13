@@ -13,7 +13,7 @@ import {
 
 type Controller = ReturnType<typeof createPublicController>;
 
-export async function registerPublicRoutes(
+export function registerPublicRoutes(
   app: FastifyInstance,
   config: AppConfig,
   controller: Controller,
