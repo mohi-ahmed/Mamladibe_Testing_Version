@@ -7,8 +7,9 @@ import { IncidentCard } from "@/components/mamla/IncidentCard";
 import { LedTicker } from "@/components/mamla/LedTicker";
 import { RoadHero } from "@/components/mamla/RoadHero";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CATEGORIES, bn, type CategoryId } from "@/lib/incidents";
-import { useIncidents } from "@/lib/store";
+import { useHomepageFeed } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -62,13 +63,16 @@ const PROMISES = [
 ];
 
 function Home() {
-  const incidents = useIncidents();
+  const feedQuery = useHomepageFeed();
+  const incidents = feedQuery.data?.items ?? [];
+  const summary = feedQuery.data?.summary;
+  const loading = feedQuery.isPending;
   const [cat, setCat] = useState<CategoryId | "all">("all");
   const feed = incidents.filter((i) => cat === "all" || i.category === cat).slice(0, 6);
 
   return (
     <>
-      <RoadHero incidents={incidents} />
+      <RoadHero incidents={incidents} summary={summary} loading={loading} />
       <LedTicker incidents={incidents} />
 
       {/* Six signs */}
@@ -84,7 +88,7 @@ function Home() {
         </div>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {CATEGORIES.map((c, i) => {
-            const count = incidents.filter((x) => x.category === c.id).length;
+            const count = summary?.categories[c.id];
             return (
               <Link
                 key={c.id}
@@ -104,7 +108,11 @@ function Home() {
                   <div className="mt-1 text-xs text-muted-foreground">{c.en}</div>
                 </div>
                 <span className="font-mono text-xs text-[color:var(--cat)]">
-                  {bn(count)} রিপোর্ট →
+                  {count === undefined ? (
+                    <Skeleton className="h-4 w-16" />
+                  ) : (
+                    <>{bn(count)} রিপোর্ট →</>
+                  )}
                 </span>
               </Link>
             );
@@ -130,7 +138,11 @@ function Home() {
           {feed.map((i, idx) => (
             <IncidentCard key={i.id} incident={i} index={idx} />
           ))}
-          {feed.length === 0 && (
+          {loading &&
+            Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-64 rounded-2xl" />
+            ))}
+          {!loading && feed.length === 0 && (
             <div className="col-span-full rounded-2xl border border-dashed border-border p-10 text-center text-muted-foreground">
               এই ক্যাটাগরিতে এখনো কোনো রিপোর্ট নেই।
             </div>

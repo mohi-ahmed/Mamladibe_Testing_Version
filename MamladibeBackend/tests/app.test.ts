@@ -31,6 +31,8 @@ describe("HTTP contract", () => {
   it("registers every public contract endpoint", () => {
     const routes = [
       ["GET", "/api/health"],
+      ["POST", "/api/identity"],
+      ["GET", "/api/feed"],
       ["GET", "/api/incidents"],
       ["POST", "/api/incidents"],
       ["GET", "/api/incidents/:trackingId"],

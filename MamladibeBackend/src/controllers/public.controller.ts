@@ -74,6 +74,11 @@ export function createPublicController(config: AppConfig, services: Services) {
       return services.incidents.list(input, optionalActor(request, config));
     },
 
+    feed: async () => services.incidents.feed(),
+
+    establishIdentity: async (_request: FastifyRequest, reply: FastifyReply) =>
+      reply.code(204).send(),
+
     getIncident: async (request: FastifyRequest) =>
       services.incidents.get(trackingIdFrom(request), optionalActor(request, config)),
 

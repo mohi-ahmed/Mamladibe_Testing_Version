@@ -3,6 +3,12 @@
   "framework": null,
   "installCommand": "npm install",
   "buildCommand": "npm run build",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://mamladibe-backend-tau.vercel.app/api/:path*"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

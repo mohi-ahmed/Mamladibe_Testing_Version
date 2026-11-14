@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, EyeOff, Map, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { HomepageFeed } from "@/lib/api";
 import { bn, categoryById, timeAgo, type Incident } from "@/lib/incidents";
 import { RoadSign, catStyle } from "./RoadSign";
 
@@ -23,8 +25,15 @@ function TrafficLight() {
   );
 }
 
-export function RoadHero({ incidents }: { incidents: Incident[] }) {
-  const today = incidents.filter((i) => Date.now() - i.createdAt < 24 * 3600_000).length;
+export function RoadHero({
+  incidents,
+  summary,
+  loading,
+}: {
+  incidents: Incident[];
+  summary?: HomepageFeed["summary"] | undefined;
+  loading: boolean;
+}) {
   const pins = incidents.slice(0, 3);
 
   return (
@@ -60,12 +69,14 @@ export function RoadHero({ incidents }: { incidents: Incident[] }) {
         </div>
         <dl className="mt-10 grid max-w-lg grid-cols-3 gap-4 border-t border-dashed border-border pt-6">
           {[
-            { k: bn(today), v: "আজকের রিপোর্ট" },
+            { k: summary ? bn(summary.today) : null, v: "আজকের রিপোর্ট" },
             { k: "০", v: "অ্যাকাউন্ট লাগে" },
             { k: "১৫′", v: "সংশোধনের সময়" },
           ].map((s) => (
             <div key={s.v}>
-              <dt className="font-display text-3xl font-extrabold text-foreground">{s.k}</dt>
+              <dt className="font-display text-3xl font-extrabold text-foreground">
+                {s.k === null ? <Skeleton className="h-9 w-12" /> : s.k}
+              </dt>
               <dd className="mt-1 text-xs text-muted-foreground">{s.v}</dd>
             </div>
           ))}
@@ -100,7 +111,13 @@ export function RoadHero({ incidents }: { incidents: Incident[] }) {
               </div>
             </div>
             <div className="text-right font-display">
-              <div className="text-3xl font-extrabold leading-none">{bn(incidents.length)}</div>
+              <div className="text-3xl font-extrabold leading-none">
+                {loading || !summary ? (
+                  <Skeleton className="ml-auto h-8 w-12 bg-white/20" />
+                ) : (
+                  bn(summary.total)
+                )}
+              </div>
               <div className="text-[11px] opacity-80">রিপোর্ট</div>
             </div>
           </div>

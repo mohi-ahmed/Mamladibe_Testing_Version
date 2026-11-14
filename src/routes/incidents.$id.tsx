@@ -11,13 +11,14 @@ import {
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MapFrame } from "@/components/mamla/MapFrame";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
 import { Turnstile } from "@/components/mamla/Turnstile";
 import { Button } from "@/components/ui/button";
-import { apiMessage } from "@/lib/api";
+import { api, apiMessage, type VoteResult } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/incidents";
 import {
   addComment,
+  applyVoteResult,
   castVote,
   flagComment,
   flagIncident,
@@ -48,6 +50,7 @@ import {
   useIncidentQuery,
   useMyVote,
   useRefreshIncident,
+  incidentKeys,
 } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -102,13 +105,46 @@ function IncidentView({ incident }: { incident: Incident }) {
   const cat = categoryById(incident.category);
   const vote = useMyVote(incident.id);
   const refresh = useRefreshIncident();
+  const queryClient = useQueryClient();
+  const [voting, setVoting] = useState(false);
+
+  useEffect(() => {
+    void api.ensureIdentity().catch(() => undefined);
+  }, []);
 
   const voteFor = async (kind: "support" | "dispute") => {
+    if (voting) return;
+    const previous = queryClient.getQueriesData({ queryKey: incidentKeys.all });
+    const nextVote = vote === kind ? null : kind;
+    const optimistic: VoteResult = {
+      vote: nextVote,
+      counts: {
+        support: Math.max(
+          0,
+          incident.support - (vote === "support" ? 1 : 0) + (nextVote === "support" ? 1 : 0),
+        ),
+        dispute: Math.max(
+          0,
+          incident.dispute - (vote === "dispute" ? 1 : 0) + (nextVote === "dispute" ? 1 : 0),
+        ),
+        flags: incident.flags,
+        comments: incident.commentCount,
+      },
+    };
+    setVoting(true);
+    queryClient.setQueriesData({ queryKey: incidentKeys.all }, (data) =>
+      applyVoteResult(data, incident.trackingId, optimistic),
+    );
     try {
-      await castVote(incident, kind);
-      await refresh(incident.trackingId);
+      const result = await castVote(incident, kind);
+      queryClient.setQueriesData({ queryKey: incidentKeys.all }, (data) =>
+        applyVoteResult(data, incident.trackingId, result),
+      );
     } catch (error) {
+      for (const [key, data] of previous) queryClient.setQueryData(key, data);
       toast.error(apiMessage(error));
+    } finally {
+      setVoting(false);
     }
   };
 
@@ -187,12 +223,14 @@ function IncidentView({ incident }: { incident: Incident }) {
                 active={vote === "support"}
                 kind="support"
                 count={incident.support}
+                disabled={voting}
                 onClick={() => void voteFor("support")}
               />
               <VoteButton
                 active={vote === "dispute"}
                 kind="dispute"
                 count={incident.dispute}
+                disabled={voting}
                 onClick={() => void voteFor("dispute")}
               />
             </div>
@@ -245,11 +283,13 @@ function VoteButton({
   kind,
   active,
   count,
+  disabled,
   onClick,
 }: {
   kind: "support" | "dispute";
   active: boolean;
   count: number;
+  disabled: boolean;
   onClick: () => void;
 }) {
   const isS = kind === "support";
@@ -257,10 +297,11 @@ function VoteButton({
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={active}
       data-testid={`vote-${kind}`}
       className={cn(
-        "group flex flex-col items-start gap-2 rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.97]",
+        "group flex flex-col items-start gap-2 rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.97] disabled:cursor-wait disabled:opacity-60",
         isS
           ? active
             ? "border-support bg-support/15"

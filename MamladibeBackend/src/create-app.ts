@@ -14,6 +14,11 @@ import { CommentService } from "./services/comment.service.js";
 import { GeocodeService } from "./services/geocode.service.js";
 import { IncidentService } from "./services/incident.service.js";
 import {
+  InMemoryFeedCache,
+  type FeedCache,
+  UpstashFeedCache,
+} from "./services/feed-cache.service.js";
+import {
   InMemoryCommentQuotaStore,
   type CommentQuotaStore,
   UpstashCommentQuotaStore,
@@ -34,6 +39,7 @@ export interface AppOptions {
   databaseReady?: Promise<unknown>;
   quota?: CommentQuotaStore;
   rateLimit?: RateLimitStore;
+  feedCache?: FeedCache;
   logger?: boolean;
 }
 
@@ -57,10 +63,18 @@ function createRateLimit(config: AppConfig) {
   return new InMemoryRateLimitStore();
 }
 
+function createFeedCache(config: AppConfig) {
+  if (config.hasRedis) {
+    return new UpstashFeedCache(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN);
+  }
+  return new InMemoryFeedCache();
+}
+
 export function buildApp(options: AppOptions = {}) {
   const config = options.config ?? loadConfig();
   const quota = options.quota ?? createQuota(config);
   const rateLimit = options.rateLimit ?? createRateLimit(config);
+  const feedCache = options.feedCache ?? createFeedCache(config);
   const loggingEnabled = options.logger ?? config.NODE_ENV !== "test";
   const app = Fastify({
     logger: loggingEnabled
@@ -104,7 +118,7 @@ export function buildApp(options: AppOptions = {}) {
     !config.isProduction && !config.TURNSTILE_SECRET,
   );
   const services = {
-    incidents: new IncidentService(config, captcha),
+    incidents: new IncidentService(config, captcha, feedCache),
     votes: new VoteService(),
     reports: new ReportService(),
     comments: new CommentService(quota, captcha),
@@ -115,7 +129,7 @@ export function buildApp(options: AppOptions = {}) {
   };
   const controller = createPublicController(config, services);
   registerPublicRoutes(app, config, controller, rateLimit);
-  registerAdminRoutes(app, config, rateLimit);
+  registerAdminRoutes(app, config, rateLimit, feedCache);
 
   app.setNotFoundHandler((request, reply) => {
     if (request.url.startsWith("/api/")) {

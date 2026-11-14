@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Check, Copy, Download } from "lucide-react";
+import { AlertTriangle, Check, Copy, Download, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { categoryById, formatDateTime, type Incident } from "@/lib/incidents";
+import { prepareTrackingHandoff } from "@/lib/tracking-handoff";
 import { RoadSign } from "./RoadSign";
 
 function CopyField({
@@ -108,7 +109,9 @@ export function CaseSlip({ incident, secret }: { incident: Incident; secret: str
               </Link>
             </Button>
             <Button asChild variant="asphalt">
-              <Link to="/track">ট্র্যাক করুন</Link>
+              <Link to="/track" onClick={() => prepareTrackingHandoff(incident.trackingId, secret)}>
+                <Pencil /> ১৫ মিনিটের মধ্যে সম্পাদনা করুন
+              </Link>
             </Button>
           </div>
         </div>

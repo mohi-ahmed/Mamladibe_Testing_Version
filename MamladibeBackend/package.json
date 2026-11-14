@@ -19,6 +19,7 @@
     "db:seed:map-test": "tsx src/scripts/seed-map-test-incidents.ts",
     "db:cleanup:map-test": "tsx src/scripts/cleanup-map-test-incidents.ts",
     "db:cleanup:acceptance-test": "tsx src/scripts/cleanup-acceptance-test-interactions.ts",
+    "db:cleanup:duplicate-votes": "tsx src/scripts/cleanup-duplicate-votes.ts",
     "test:acceptance:incident-rate": "tsx src/scripts/verify-incident-rate-limit.ts",
     "test:acceptance:admin": "tsx src/scripts/verify-admin-acceptance.ts"
   },

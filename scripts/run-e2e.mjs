@@ -4,7 +4,10 @@ const baseUrl = "http://127.0.0.1:4173";
 const vite = spawn(
   process.execPath,
   ["./node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", "4173", "--strictPort"],
-  { stdio: "inherit", env: process.env },
+  {
+    stdio: "inherit",
+    env: { ...process.env, VITE_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" },
+  },
 );
 
 async function waitUntilReady() {

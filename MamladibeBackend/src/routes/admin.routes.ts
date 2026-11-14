@@ -15,6 +15,7 @@ import {
 import { AdminModerationService } from "../services/admin-moderation.service.js";
 import { writeAudit } from "../services/audit.service.js";
 import { enforceRateLimit, type RateLimitStore } from "../services/rate-limit.service.js";
+import type { FeedCache } from "../services/feed-cache.service.js";
 import {
   activityQuerySchema,
   adminCreateSchema,
@@ -69,9 +70,10 @@ export function registerAdminRoutes(
   app: FastifyInstance,
   config: AppConfig,
   rateLimit: RateLimitStore,
+  feedCache?: FeedCache,
 ) {
   const auth = new AdminAuthService(config);
-  const service = new AdminModerationService();
+  const service = new AdminModerationService(feedCache);
   const guards = createAdminGuards(config);
   const both = ["moderator", "super_admin"] as const;
   const superOnly = ["super_admin"] as const;

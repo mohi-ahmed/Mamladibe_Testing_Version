@@ -36,6 +36,22 @@ interface PublicComment extends Omit<IncidentComment, "incidentId" | "createdAt"
   createdAt: string;
 }
 
+export interface VoteResult {
+  vote: "support" | "dispute" | null;
+  counts: { support: number; dispute: number; flags: number; comments: number };
+}
+
+export interface HomepageFeed {
+  items: Incident[];
+  summary: {
+    total: number;
+    today: number;
+    categories: Partial<Record<CategoryId, number>>;
+  };
+}
+
+let identityRequest: Promise<void> | null = null;
+
 function incidentFromApi(value: PublicIncident): Incident {
   return {
     ...value,
@@ -134,6 +150,22 @@ export interface TrackResult {
 }
 
 export const api = {
+  ensureIdentity() {
+    identityRequest ??= request<void>("/api/identity", { method: "POST" }).catch((error) => {
+      identityRequest = null;
+      throw error;
+    });
+    return identityRequest;
+  },
+
+  async homepageFeed(): Promise<HomepageFeed> {
+    const result = await request<{
+      items: PublicIncident[];
+      summary: HomepageFeed["summary"];
+    }>("/api/feed");
+    return { ...result, items: result.items.map(incidentFromApi) };
+  },
+
   async listIncidents(params: IncidentListParams = {}) {
     const result = await request<{ items: PublicIncident[]; pagination: Pagination }>(
       `/api/incidents${query({ ...params })}`,
@@ -168,14 +200,19 @@ export const api = {
   },
 
   async setVote(trackingId: string, type: "support" | "dispute") {
-    return request(`/api/incidents/${encodeURIComponent(trackingId)}/vote`, {
+    await this.ensureIdentity();
+    return request<VoteResult>(`/api/incidents/${encodeURIComponent(trackingId)}/vote`, {
       method: "POST",
       body: JSON.stringify({ type }),
     });
   },
 
   removeVote(trackingId: string) {
-    return request(`/api/incidents/${encodeURIComponent(trackingId)}/vote`, { method: "DELETE" });
+    return this.ensureIdentity().then(() =>
+      request<VoteResult>(`/api/incidents/${encodeURIComponent(trackingId)}/vote`, {
+        method: "DELETE",
+      }),
+    );
   },
 
   reportIncident(trackingId: string, reason: string) {

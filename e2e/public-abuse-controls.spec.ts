@@ -19,16 +19,36 @@ async function installTurnstileStub(page: Page) {
 
 test("switches one browser vote atomically", async ({ page }) => {
   let vote: "support" | "dispute" | null = null;
+  let voteRequests = 0;
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     if (url.pathname.endsWith("/vote") && request.method() === "POST") {
+      voteRequests += 1;
       vote = (request.postDataJSON() as { type: "support" | "dispute" }).type;
-      return route.fulfill({ status: 200, json: { vote } });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return route.fulfill({
+        status: 200,
+        json: {
+          vote,
+          counts: {
+            support: vote === "support" ? 1 : 0,
+            dispute: vote === "dispute" ? 1 : 0,
+            flags: 0,
+            comments: 0,
+          },
+        },
+      });
     }
     if (url.pathname.endsWith("/vote") && request.method() === "DELETE") {
       vote = null;
-      return route.fulfill({ status: 204 });
+      return route.fulfill({
+        status: 200,
+        json: {
+          vote,
+          counts: { support: 0, dispute: 0, flags: 0, comments: 0 },
+        },
+      });
     }
     if (url.pathname.endsWith("/comments")) {
       return route.fulfill({
@@ -66,7 +86,10 @@ test("switches one browser vote atomically", async ({ page }) => {
   const support = page.getByTestId("vote-support");
   const dispute = page.getByTestId("vote-dispute");
   await support.click();
+  await expect(dispute).toBeDisabled();
+  expect(voteRequests).toBe(1);
   await expect(support).toHaveAttribute("aria-pressed", "true");
+  await expect(dispute).toBeEnabled();
   await dispute.click();
   await expect(support).toHaveAttribute("aria-pressed", "false");
   await expect(dispute).toHaveAttribute("aria-pressed", "true");
@@ -75,6 +98,7 @@ test("switches one browser vote atomically", async ({ page }) => {
 });
 
 test("rejects the sixth comment in the browser flow", async ({ page }) => {
+  test.setTimeout(60_000);
   await installTurnstileStub(page);
   const comments: Array<Record<string, unknown>> = [];
   await page.route("**/api/**", async (route) => {
@@ -153,6 +177,7 @@ test("rejects the sixth comment in the browser flow", async ({ page }) => {
   const submit = page.getByTestId("comment-submit");
   for (let index = 1; index <= 5; index += 1) {
     await input.fill(`E2E quota comment ${index}`);
+    await expect(submit).toBeEnabled();
     await submit.click();
     await expect(input).toHaveValue("");
   }

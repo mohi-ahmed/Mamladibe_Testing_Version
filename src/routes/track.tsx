@@ -6,6 +6,7 @@ import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
 import { Button } from "@/components/ui/button";
 import { api, apiMessage, type TrackResult } from "@/lib/api";
 import { RULES, bn, categoryById, changeRatio, formatDateTime } from "@/lib/incidents";
+import { consumeTrackingHandoff } from "@/lib/tracking-handoff";
 
 export const Route = createFileRoute("/track")({
   head: () => ({
@@ -35,6 +36,22 @@ function TrackPage() {
   const [found, setFound] = useState<TrackResult | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const handoff = consumeTrackingHandoff();
+    if (!handoff) return;
+    setTid(handoff.trackingId);
+    setSecret(handoff.secret);
+    setLoading(true);
+    void api
+      .track(handoff.trackingId, handoff.secret)
+      .then((result) => {
+        setError(false);
+        setFound(result);
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

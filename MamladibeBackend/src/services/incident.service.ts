@@ -11,7 +11,12 @@ import {
 import { isInBangladesh, RULES } from "../lib/constants.js";
 import { IncidentModel } from "../models/index.js";
 import type { CaptchaService } from "./captcha.service.js";
-import { requirePublishedIncident, toPublicIncident } from "./incident.mapper.js";
+import type { FeedCache } from "./feed-cache.service.js";
+import {
+  requirePublishedIncident,
+  toPublicIncident,
+  toPublicIncidents,
+} from "./incident.mapper.js";
 
 interface CreateIncidentInput {
   title: string;
@@ -64,6 +69,7 @@ export class IncidentService {
   constructor(
     private readonly config: AppConfig,
     private readonly captcha: CaptchaService,
+    private readonly feedCache: FeedCache,
   ) {}
 
   async create(input: CreateIncidentInput, actorId: string, remoteIp?: string) {
@@ -110,6 +116,8 @@ export class IncidentService {
       }
     }
     if (!incident) throw new AppError("CONFLICT", "Could not allocate a Tracking ID.");
+
+    await this.feedCache.invalidate().catch(() => undefined);
 
     return {
       incident: await toPublicIncident(incident, actorId),
@@ -162,7 +170,7 @@ export class IncidentService {
       IncidentModel.countDocuments(filter),
     ]);
     return {
-      items: await Promise.all(documents.map((document) => toPublicIncident(document, actorId))),
+      items: await toPublicIncidents(documents, actorId),
       pagination: {
         page,
         pageSize,
@@ -170,6 +178,39 @@ export class IncidentService {
         totalPages: Math.ceil(totalItems / pageSize),
       },
     };
+  }
+
+  async feed() {
+    const cached = await this.feedCache.get<any>().catch(() => null);
+    if (cached) return cached;
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1_000);
+    const [documents, totals] = await Promise.all([
+      IncidentModel.find({ status: "published" }).sort({ createdAt: -1 }).limit(12),
+      IncidentModel.aggregate([
+        { $match: { status: "published" } },
+        {
+          $facet: {
+            total: [{ $count: "value" }],
+            today: [{ $match: { createdAt: { $gte: since } } }, { $count: "value" }],
+            categories: [{ $group: { _id: "$category", count: { $sum: 1 } } }],
+          },
+        },
+      ]),
+    ]);
+    const summary = totals[0] ?? { total: [], today: [], categories: [] };
+    const result = {
+      items: await toPublicIncidents(documents),
+      summary: {
+        total: summary.total?.[0]?.value ?? 0,
+        today: summary.today?.[0]?.value ?? 0,
+        categories: Object.fromEntries(
+          (summary.categories ?? []).map((row: any) => [row._id, row.count]),
+        ),
+      },
+    };
+    await this.feedCache.set(result).catch(() => undefined);
+    return result;
   }
 
   async get(trackingId: string, actorId?: string) {

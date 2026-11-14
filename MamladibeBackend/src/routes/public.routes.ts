@@ -20,7 +20,11 @@ export function registerPublicRoutes(
   rateLimit: RateLimitStore,
 ) {
   const publicWrite =
-    (action?: RateLimitAction, feature?: "incidents" | "comments") =>
+    (
+      action?: RateLimitAction,
+      feature?: "incidents" | "comments",
+      networkSubject?: (request: FastifyRequest) => string,
+    ) =>
     async (request: FastifyRequest, reply: FastifyReply) => {
       requireAllowedOrigin(request, config);
       if (feature) {
@@ -39,7 +43,13 @@ export function registerPublicRoutes(
       await requirePublicActor(request, reply, config);
       if (action) {
         await enforceRateLimit(rateLimit, action, request.actor!.id, "actor");
-        await enforceRateLimit(rateLimit, action, networkHash(request, config), "network");
+        const network = networkHash(request, config);
+        await enforceRateLimit(
+          rateLimit,
+          action,
+          networkSubject ? `${network}:${networkSubject(request)}` : network,
+          "network",
+        );
       }
     };
 
@@ -48,6 +58,8 @@ export function registerPublicRoutes(
   };
 
   app.get("/api/health", controller.health);
+  app.post("/api/identity", { preHandler: publicWrite() }, controller.establishIdentity);
+  app.get("/api/feed", controller.feed);
   app.get("/api/incidents", controller.listIncidents);
   app.get("/api/incidents/:trackingId", controller.getIncident);
   app.post(
@@ -58,12 +70,16 @@ export function registerPublicRoutes(
 
   app.post(
     "/api/incidents/:trackingId/vote",
-    { preHandler: publicWrite("vote") },
+    {
+      preHandler: publicWrite("vote", undefined, (request) => trackingIdFromRequest(request)),
+    },
     controller.setVote,
   );
   app.delete(
     "/api/incidents/:trackingId/vote",
-    { preHandler: publicWrite("vote") },
+    {
+      preHandler: publicWrite("vote", undefined, (request) => trackingIdFromRequest(request)),
+    },
     controller.removeVote,
   );
   app.post(
@@ -92,4 +108,9 @@ export function registerPublicRoutes(
     controller.editIncident,
   );
   app.get("/api/geo/reverse", controller.reverseGeocode);
+}
+
+function trackingIdFromRequest(request: FastifyRequest) {
+  const value = (request.params as { trackingId?: string }).trackingId ?? "unknown";
+  return value.toUpperCase();
 }

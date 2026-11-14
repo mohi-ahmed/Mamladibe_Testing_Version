@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type IncidentListParams } from "./api";
+import { api, type IncidentListParams, type VoteResult } from "./api";
 import type { Incident } from "./incidents";
 
 export const incidentKeys = {
@@ -7,15 +7,16 @@ export const incidentKeys = {
   list: (params: IncidentListParams) => ["incidents", "list", params] as const,
   detail: (trackingId: string) => ["incidents", "detail", trackingId.toUpperCase()] as const,
   comments: (trackingId: string) => ["incidents", "comments", trackingId.toUpperCase()] as const,
+  feed: ["incidents", "feed"] as const,
 };
 
-/** Public feed used by the home and map screens. */
-export function useIncidents() {
-  const result = useQuery({
-    queryKey: incidentKeys.list({ page: 1, pageSize: 100, sort: "newest" }),
-    queryFn: () => api.listIncidents({ page: 1, pageSize: 100, sort: "newest" }),
+/** Lightweight cached feed used only by the homepage. */
+export function useHomepageFeed() {
+  return useQuery({
+    queryKey: incidentKeys.feed,
+    queryFn: () => api.homepageFeed(),
+    staleTime: 15_000,
   });
-  return result.data?.items ?? [];
 }
 
 export function useIncidentList(params: IncidentListParams, options?: { enabled?: boolean }) {
@@ -74,6 +75,31 @@ export function useRefreshIncident() {
 export async function castVote(incident: Incident, vote: "support" | "dispute") {
   if (incident.viewerState.vote === vote) return api.removeVote(incident.trackingId);
   return api.setVote(incident.trackingId, vote);
+}
+
+function patchIncident(incident: Incident, trackingId: string, result: VoteResult) {
+  if (incident.trackingId !== trackingId) return incident;
+  return {
+    ...incident,
+    support: result.counts.support,
+    dispute: result.counts.dispute,
+    flags: result.counts.flags,
+    commentCount: result.counts.comments,
+    viewerState: { ...incident.viewerState, vote: result.vote },
+  };
+}
+
+export function applyVoteResult(data: unknown, trackingId: string, result: VoteResult): unknown {
+  if (!data || typeof data !== "object") return data;
+  if ("trackingId" in data) return patchIncident(data as Incident, trackingId, result);
+  if ("items" in data && Array.isArray((data as { items: unknown }).items)) {
+    const container = data as { items: Incident[] };
+    return {
+      ...container,
+      items: container.items.map((item) => patchIncident(item, trackingId, result)),
+    };
+  }
+  return data;
 }
 
 export const flagIncident = (trackingId: string, reason: string) =>

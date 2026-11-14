@@ -18,6 +18,7 @@ import {
 } from "../models/index.js";
 import { communityCounts } from "./incident.mapper.js";
 import { writeAudit, type AuditAction, type AuditTarget } from "./audit.service.js";
+import type { FeedCache } from "./feed-cache.service.js";
 
 type AdminContext = { id: string; role: "moderator" | "super_admin" };
 
@@ -138,6 +139,8 @@ const transitions = {
 } as const;
 
 export class AdminModerationService {
+  constructor(private readonly feedCache?: FeedCache) {}
+
   async dashboard() {
     const start = new Date();
     start.setUTCHours(0, 0, 0, 0);
@@ -263,7 +266,7 @@ export class AdminModerationService {
       throw new AppError("OUTSIDE_BANGLADESH", "Coordinates must be inside Bangladesh.");
     if (new Date(input.incidentAt).getTime() > Date.now())
       throw new AppError("FUTURE_INCIDENT_TIME", "Incident time cannot be in the future.");
-    return withTransaction(async (session) => {
+    const result = await withTransaction(async (session) => {
       const [created] = await IncidentModel.create(
         [
           {
@@ -298,6 +301,8 @@ export class AdminModerationService {
       );
       return { incident: await incidentDto(created) };
     });
+    await this.feedCache?.invalidate().catch(() => undefined);
+    return result;
   }
 
   async moderateIncident(trackingId: string, input: any, admin: AdminContext) {
