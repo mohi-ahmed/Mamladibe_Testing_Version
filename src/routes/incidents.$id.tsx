@@ -482,7 +482,7 @@ function Comments({ incidentId }: { incidentId: string }) {
   };
 
   return (
-    <section className="mt-12 grid gap-8 lg:grid-cols-[1fr_380px]">
+    <section id="comments" className="mt-12 scroll-mt-24 grid gap-8 lg:grid-cols-[1fr_380px]">
       <div>
         <h2 className="text-2xl font-extrabold">
           কমিউনিটির মন্তব্য <span className="text-muted-foreground">({bn(comments.length)})</span>

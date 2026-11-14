@@ -86,6 +86,69 @@ test("switches one browser vote atomically", async ({ page }) => {
   await expect(dispute).toHaveAttribute("aria-pressed", "false");
 });
 
+test("votes from an incident card and opens its comments", async ({ page }) => {
+  let vote: "support" | "dispute" | null = null;
+  const incident = () => ({
+    trackingId,
+    title: "E2E interactive incident card",
+    description: "Card controls vote without navigating away and link directly to comments.",
+    category: "road",
+    lat: 23.78,
+    lng: 90.4,
+    roadName: "Test Road",
+    areaName: "Mohakhali",
+    incidentAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    support: vote === "support" ? 1 : 0,
+    dispute: vote === "dispute" ? 1 : 0,
+    flags: 0,
+    commentCount: 0,
+    isEdited: false,
+    byModerator: false,
+    viewerState: { vote, hasFlagged: false },
+  });
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/identity") return route.fulfill({ status: 204 });
+    if (url.pathname.endsWith("/vote") && request.method() === "POST") {
+      vote = (request.postDataJSON() as { type: "support" | "dispute" }).type;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return route.fulfill({ status: 200, json: { vote } });
+    }
+    if (url.pathname.endsWith("/comments")) {
+      return route.fulfill({
+        status: 200,
+        json: { items: [], pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } },
+      });
+    }
+    if (url.pathname === "/api/incidents") {
+      return route.fulfill({
+        status: 200,
+        json: {
+          items: [incident()],
+          pagination: { page: 1, pageSize: 12, totalItems: 1, totalPages: 1 },
+        },
+      });
+    }
+    return route.fulfill({ status: 200, json: { incident: incident() } });
+  });
+
+  await page.goto("/incidents");
+  const support = page.getByTestId(`card-vote-support-${trackingId}`);
+  const dispute = page.getByTestId(`card-vote-dispute-${trackingId}`);
+  await support.click();
+  await expect(support).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/\/incidents$/);
+  await expect(dispute).toBeEnabled();
+  await dispute.click();
+  await expect(dispute).toHaveAttribute("aria-pressed", "true");
+  await page.getByLabel("মন্তব্য দেখুন বা যোগ করুন").click();
+  await expect(page).toHaveURL(/\/incidents\/md-e2e001#comments$/);
+  await expect(page.locator("#comments")).toBeVisible();
+});
+
 test("rejects the sixth comment in the browser flow", async ({ page }) => {
   test.setTimeout(60_000);
   await installTurnstileStub(page);
