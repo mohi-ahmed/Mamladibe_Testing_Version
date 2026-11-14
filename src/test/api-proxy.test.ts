@@ -11,7 +11,15 @@ describe("same-origin API proxy", () => {
       expect(request.headers.get("cookie")).toBe("mdb_anon=test-cookie");
       expect(request.headers.get("origin")).toBe("https://mamladibe.example");
       expect(await request.text()).toBe('{"title":"test"}');
-      return new Response("ok", { status: 201 });
+      return new Response('{"created":true}', {
+        status: 201,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-encoding": "gzip",
+          "content-length": "999",
+          "set-cookie": "mdb_anon=test-cookie; Path=/; HttpOnly",
+        },
+      });
     });
     const request = new Request("https://mamladibe.example/api/incidents?page=2", {
       method: "POST",
@@ -25,7 +33,29 @@ describe("same-origin API proxy", () => {
 
     const response = await proxyApiRequest(request, "https://backend.example", fetcher);
     expect(response?.status).toBe(201);
+    await expect(response?.json()).resolves.toEqual({ created: true });
+    expect(response?.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    expect(response?.headers.get("set-cookie")).toContain("mdb_anon=test-cookie");
+    expect(response?.headers.has("content-encoding")).toBe(false);
+    expect(response?.headers.has("content-length")).toBe(false);
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("returns a bodyless response for HEAD and no-content statuses", async () => {
+    const head = await proxyApiRequest(
+      new Request("https://mamladibe.example/api/health", { method: "HEAD" }),
+      "https://backend.example",
+      async () => new Response("ignored"),
+    );
+    expect(await head?.text()).toBe("");
+
+    const noContent = await proxyApiRequest(
+      new Request("https://mamladibe.example/api/vote", { method: "DELETE" }),
+      "https://backend.example",
+      async () => new Response(null, { status: 204 }),
+    );
+    expect(noContent?.status).toBe(204);
+    expect(await noContent?.text()).toBe("");
   });
 
   it("ignores non-API traffic and fails closed when production proxy config is missing", async () => {

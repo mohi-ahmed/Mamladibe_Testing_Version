@@ -1,5 +1,7 @@
 type Fetcher = (request: Request) => Promise<Response>;
 
+const BODYLESS_STATUSES = new Set([204, 205, 304]);
+
 function configuredBackendOrigin(value = process.env["BACKEND_ORIGIN"]) {
   const raw = value?.trim();
   if (!raw) return null;
@@ -44,5 +46,23 @@ export async function proxyApiRequest(
     // Required by Node's fetch when forwarding a streaming request body.
     duplex: request.body ? "half" : undefined,
   } as RequestInit);
-  return fetcher(upstream);
+  const response = await fetcher(upstream);
+
+  // Nitro's Vercel adapter can keep the status while dropping an upstream
+  // undici Response body stream. Materialize it into a platform-owned Response
+  // so JSON and Set-Cookie headers survive the same-origin proxy.
+  const responseHeaders = new Headers(response.headers);
+  responseHeaders.delete("content-encoding");
+  responseHeaders.delete("content-length");
+  responseHeaders.delete("transfer-encoding");
+  const body =
+    request.method === "HEAD" || BODYLESS_STATUSES.has(response.status)
+      ? null
+      : await response.arrayBuffer();
+
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: responseHeaders,
+  });
 }
