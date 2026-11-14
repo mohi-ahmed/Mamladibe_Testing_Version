@@ -10,6 +10,7 @@ import {
   Scale,
   ThumbsDown,
   ThumbsUp,
+  Timer,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -53,6 +54,7 @@ import {
   incidentKeys,
 } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { trackingHandoffStatus } from "@/lib/tracking-handoff";
 
 export const Route = createFileRoute("/incidents/$id")({
   head: ({ params }) => {
@@ -107,10 +109,25 @@ function IncidentView({ incident }: { incident: Incident }) {
   const refresh = useRefreshIncident();
   const queryClient = useQueryClient();
   const [voting, setVoting] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const reporterEdit = trackingHandoffStatus(incident.trackingId, now);
+  const editExpiresAt = reporterEdit?.expiresAt;
+  const editExpired = reporterEdit?.expired ?? false;
+  const editSeconds = reporterEdit
+    ? Math.max(0, Math.ceil((reporterEdit.expiresAt - now) / 1_000))
+    : 0;
+  const editMinutesPart = Math.floor(editSeconds / 60);
+  const editSecondsPart = editSeconds % 60;
 
   useEffect(() => {
     void api.ensureIdentity().catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!editExpiresAt || editExpired) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [editExpired, editExpiresAt]);
 
   const voteFor = async (kind: "support" | "dispute") => {
     if (voting) return;
@@ -196,6 +213,32 @@ function IncidentView({ incident }: { incident: Incident }) {
                 </span>
               )}
             </div>
+            {reporterEdit && (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/40 bg-primary/10 p-4">
+                <div className="flex items-center gap-3">
+                  <Timer className="h-5 w-5 text-primary" />
+                  <div>
+                    <div className="text-sm font-bold">নিজের রিপোর্ট দ্রুত সংশোধন করুন</div>
+                    <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+                      {reporterEdit.expired
+                        ? "১৫ মিনিটের সম্পাদনার সময় শেষ"
+                        : `বাকি ${String(editMinutesPart).padStart(2, "0")}:${String(editSecondsPart).padStart(2, "0")}`}
+                    </div>
+                  </div>
+                </div>
+                {reporterEdit.expired ? (
+                  <Button variant="road" size="sm" disabled>
+                    <Pencil /> সম্পাদনার সময় শেষ
+                  </Button>
+                ) : (
+                  <Button asChild variant="road" size="sm">
+                    <Link to="/track">
+                      <Pencil /> সম্পাদনা করুন
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
             <div className="lane-dash my-8 h-[3px] opacity-60" />
             <p className="whitespace-pre-line text-lg leading-[1.9] text-foreground/90">
               {incident.description}

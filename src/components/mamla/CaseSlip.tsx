@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check, Copy, Download, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { categoryById, formatDateTime, type Incident } from "@/lib/incidents";
@@ -53,6 +53,10 @@ function CopyField({
 }
 
 export function CaseSlip({ incident, secret }: { incident: Incident; secret: string }) {
+  useEffect(() => {
+    prepareTrackingHandoff(incident.trackingId, secret, incident.createdAt);
+  }, [incident.createdAt, incident.trackingId, secret]);
+
   const download = () => {
     const body = `MAMLADIBE — রিপোর্ট স্লিপ\n\nTracking ID: ${incident.trackingId}\nSecret: ${secret}\n\nশিরোনাম: ${incident.title}\nপ্রকাশ: ${formatDateTime(incident.createdAt)}\n\nSecret টি হারালে আর ফেরত পাওয়া যাবে না।\n১৫ মিনিটের মধ্যে বানান সংশোধন করা যাবে।`;
     const url = URL.createObjectURL(new Blob([body], { type: "text/plain;charset=utf-8" }));
@@ -109,7 +113,7 @@ export function CaseSlip({ incident, secret }: { incident: Incident; secret: str
               </Link>
             </Button>
             <Button asChild variant="asphalt">
-              <Link to="/track" onClick={() => prepareTrackingHandoff(incident.trackingId, secret)}>
+              <Link to="/track">
                 <Pencil /> ১৫ মিনিটের মধ্যে সম্পাদনা করুন
               </Link>
             </Button>
