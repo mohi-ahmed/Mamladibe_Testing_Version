@@ -38,8 +38,7 @@ export async function requirePublicActor(
   const actorId = deriveHmac(token, config.ACTOR_HMAC_SECRET);
   const requestNetworkHash = networkHash(request, config);
   request.actor = { id: actorId, token, isNew };
-  await ensureActorIsAllowed(actorId, requestNetworkHash);
-  await touchActor(actorId);
+  await Promise.all([ensureActorIsAllowed(actorId, requestNetworkHash), touchActor(actorId)]);
 }
 
 export function requireAllowedOrigin(request: FastifyRequest, config: AppConfig) {

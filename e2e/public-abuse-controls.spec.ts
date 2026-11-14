@@ -29,25 +29,14 @@ test("switches one browser vote atomically", async ({ page }) => {
       await new Promise((resolve) => setTimeout(resolve, 150));
       return route.fulfill({
         status: 200,
-        json: {
-          vote,
-          counts: {
-            support: vote === "support" ? 1 : 0,
-            dispute: vote === "dispute" ? 1 : 0,
-            flags: 0,
-            comments: 0,
-          },
-        },
+        json: { vote },
       });
     }
     if (url.pathname.endsWith("/vote") && request.method() === "DELETE") {
       vote = null;
       return route.fulfill({
         status: 200,
-        json: {
-          vote,
-          counts: { support: 0, dispute: 0, flags: 0, comments: 0 },
-        },
+        json: { vote },
       });
     }
     if (url.pathname.endsWith("/comments")) {

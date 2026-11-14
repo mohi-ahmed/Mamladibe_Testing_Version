@@ -384,10 +384,13 @@ Success: `200 OK`
 
 ```json
 {
-  "vote": "support",
-  "counts": { "support": 12, "dispute": 3, "flags": 1, "comments": 4 }
+  "vote": "support"
 }
 ```
+
+The client updates the displayed vote and counts optimistically. Authoritative community counts are
+returned by the normal incident detail/list/feed reads; the mutation response intentionally avoids a
+second count aggregation so voting is not delayed by unrelated flag and comment queries.
 
 ### 5.5 Remove vote
 
@@ -399,8 +402,7 @@ Success: `200 OK`
 
 ```json
 {
-  "vote": null,
-  "counts": { "support": 11, "dispute": 3, "flags": 1, "comments": 4 }
+  "vote": null
 }
 ```
 

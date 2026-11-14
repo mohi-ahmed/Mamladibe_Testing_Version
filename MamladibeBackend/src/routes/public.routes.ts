@@ -42,14 +42,16 @@ export function registerPublicRoutes(
       }
       await requirePublicActor(request, reply, config);
       if (action) {
-        await enforceRateLimit(rateLimit, action, request.actor!.id, "actor");
         const network = networkHash(request, config);
-        await enforceRateLimit(
-          rateLimit,
-          action,
-          networkSubject ? `${network}:${networkSubject(request)}` : network,
-          "network",
-        );
+        await Promise.all([
+          enforceRateLimit(rateLimit, action, request.actor!.id, "actor"),
+          enforceRateLimit(
+            rateLimit,
+            action,
+            networkSubject ? `${network}:${networkSubject(request)}` : network,
+            "network",
+          ),
+        ]);
       }
     };
 

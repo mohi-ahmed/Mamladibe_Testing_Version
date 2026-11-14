@@ -38,7 +38,7 @@ interface PublicComment extends Omit<IncidentComment, "incidentId" | "createdAt"
 
 export interface VoteResult {
   vote: "support" | "dispute" | null;
-  counts: { support: number; dispute: number; flags: number; comments: number };
+  counts?: { support: number; dispute: number; flags: number; comments: number };
 }
 
 export interface HomepageFeed {

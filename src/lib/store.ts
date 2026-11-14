@@ -81,10 +81,14 @@ function patchIncident(incident: Incident, trackingId: string, result: VoteResul
   if (incident.trackingId !== trackingId) return incident;
   return {
     ...incident,
-    support: result.counts.support,
-    dispute: result.counts.dispute,
-    flags: result.counts.flags,
-    commentCount: result.counts.comments,
+    ...(result.counts
+      ? {
+          support: result.counts.support,
+          dispute: result.counts.dispute,
+          flags: result.counts.flags,
+          commentCount: result.counts.comments,
+        }
+      : {}),
     viewerState: { ...incident.viewerState, vote: result.vote },
   };
 }
