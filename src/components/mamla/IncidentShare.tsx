@@ -13,7 +13,11 @@ import type { Incident } from "@/lib/incidents";
 import { cn } from "@/lib/utils";
 
 function incidentShareData(incident: Incident) {
-  const url = new URL(`/incidents/${incident.id}`, window.location.origin).toString();
+  const shareUrl = new URL(`/incidents/${incident.id}`, window.location.origin);
+  // Version the shared URL so social crawlers do not reuse an older preview
+  // after Open Graph image or metadata updates. The route ignores this value.
+  shareUrl.searchParams.set("share", "2");
+  const url = shareUrl.toString();
   return {
     title: `${incident.title} — Mamladibe`,
     text: `${incident.title}\n${incident.areaName} — Mamladibe`,
