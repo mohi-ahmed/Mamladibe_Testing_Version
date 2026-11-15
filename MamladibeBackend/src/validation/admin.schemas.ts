@@ -151,6 +151,22 @@ export const auditListQuerySchema = strict({
   sort: z.enum(["newest", "oldest"]).default("newest"),
   ...pageQuery,
 });
+export const monitoringListQuerySchema = strict({
+  q: z.string().trim().max(100).optional(),
+  action: z.enum(["incident", "comment", "vote", "flag", "track"]).optional(),
+  result: z.enum(["accepted", "blocked", "failed"]).optional(),
+  reason: z.string().trim().max(100).optional(),
+  from: dateQuery,
+  to: dateQuery,
+  sort: z.enum(["newest", "oldest"]).default("newest"),
+  ...pageQuery,
+});
+export const monitoringSubjectQuerySchema = strict({
+  actorRef: z.string().trim().max(80).optional(),
+  networkRef: z.string().trim().max(80).optional(),
+}).refine((value) => Boolean(value.actorRef) !== Boolean(value.networkRef), {
+  message: "Provide exactly one monitoring subject reference.",
+});
 export const activityQuerySchema = strict({
   trackingId: z.string().trim().optional(),
   anonymousId: z.string().trim().optional(),

@@ -32,6 +32,8 @@ import {
   incidentListQuerySchema,
   loginSchema,
   moderationSchema,
+  monitoringListQuerySchema,
+  monitoringSubjectQuerySchema,
   noteSchema,
   objectId,
   reasonSchema,
@@ -246,6 +248,16 @@ export function registerAdminRoutes(
       parseInput(flagReviewSchema, r.body),
       adminContext(r),
     ),
+  );
+
+  app.get("/api/admin/monitoring/summary", { preHandler: guards.roles(both) }, () =>
+    service.monitoringSummary(),
+  );
+  app.get("/api/admin/monitoring/events", { preHandler: guards.roles(both) }, (r) =>
+    service.listMonitoring(parseInput(monitoringListQuerySchema, r.query)),
+  );
+  app.get("/api/admin/monitoring/subject", { preHandler: guards.roles(both) }, (r) =>
+    service.monitoringSubject(parseInput(monitoringSubjectQuerySchema, r.query)),
   );
 
   app.get("/api/admin/activity", { preHandler: guards.roles(both) }, (r) => {

@@ -109,6 +109,41 @@ export interface AdminSettings {
   updatedAt?: string;
 }
 
+export interface MonitoringSummary {
+  reportAttempts1h: number;
+  reportAttempts24h: number;
+  acceptedReports24h: number;
+  blocked24h: number;
+  cooldownBlocks24h: number;
+  userLimitBlocks24h: number;
+  networkLimitBlocks24h: number;
+  captchaFailures24h: number;
+  invalidSubmissions24h: number;
+  duplicateSignals24h: number;
+  activeActors24h: number;
+  activeNetworks24h: number;
+}
+
+export interface MonitoringEvent {
+  id: string;
+  action: "incident" | "comment" | "vote" | "flag" | "track";
+  result: "accepted" | "blocked" | "failed";
+  reason: string;
+  actorRef?: string;
+  networkRef?: string;
+  targetId?: string;
+  statusCode: number;
+  retryAfterSeconds?: number;
+  duplicateSignal: boolean;
+  createdAt: string;
+}
+
+export interface MonitoringSubject {
+  subject: { kind: "actor" | "network"; ref: string };
+  totals: { attempts: number; accepted: number; blocked: number; failed: number };
+  timeline: MonitoringEvent[];
+}
+
 let csrfToken = "";
 
 function query(values: Record<string, string | number | boolean | undefined>) {
@@ -272,6 +307,13 @@ export const adminApi = {
     ),
   audit: (params: Record<string, string | number | undefined>) =>
     request<{ items: AuditEntry[]; pagination: Pagination }>(`/api/admin/audit${query(params)}`),
+  monitoringSummary: () => request<MonitoringSummary>("/api/admin/monitoring/summary"),
+  monitoringEvents: (params: Record<string, string | number | undefined>) =>
+    request<{ items: MonitoringEvent[]; pagination: Pagination }>(
+      `/api/admin/monitoring/events${query(params)}`,
+    ),
+  monitoringSubject: (value: { actorRef?: string; networkRef?: string }) =>
+    request<MonitoringSubject>(`/api/admin/monitoring/subject${query(value)}`),
   settings: () => request<AdminSettings>("/api/admin/settings"),
   updateSettings: (input: Partial<AdminSettings> & { reason: string }) =>
     request<AdminSettings>("/api/admin/settings", {

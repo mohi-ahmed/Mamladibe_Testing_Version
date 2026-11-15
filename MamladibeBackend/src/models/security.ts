@@ -35,15 +35,22 @@ const rateEventSchema = new Schema(
     },
     result: {
       type: String,
-      enum: ["allowed", "limited", "captcha_required", "blocked"],
+      enum: ["accepted", "blocked", "failed"],
       required: true,
     },
+    reason: { type: String, required: true, trim: true, maxlength: 100 },
+    targetId: { type: String, trim: true, maxlength: 100 },
+    statusCode: { type: Number, required: true, min: 100, max: 599 },
+    retryAfterSeconds: { type: Number, min: 1 },
+    duplicateSignal: { type: Boolean, required: true, default: false },
     expiresAt: { type: Date, required: true },
   },
   { timestamps: { createdAt: true, updatedAt: false }, versionKey: false },
 );
 rateEventSchema.index({ actorId: 1, action: 1, createdAt: -1 });
 rateEventSchema.index({ networkHash: 1, action: 1, createdAt: -1 });
+rateEventSchema.index({ createdAt: -1, action: 1, result: 1 });
+rateEventSchema.index({ reason: 1, createdAt: -1 });
 rateEventSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const blockSchema = new Schema(

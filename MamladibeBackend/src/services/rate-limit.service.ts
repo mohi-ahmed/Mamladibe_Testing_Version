@@ -123,10 +123,25 @@ export async function enforceRateLimit(
   subject: string,
   scope: RateLimitScope = "actor",
 ) {
+  const policy = POLICIES[action][scope];
   const decision = await store.consume(action, subject, scope);
   if (!decision.allowed) {
     throw new AppError("RATE_LIMITED", "Too many requests. Try again later.", {
-      details: { retryAfterSeconds: decision.retryAfterSeconds },
+      details: {
+        retryAfterSeconds: decision.retryAfterSeconds,
+        action,
+        scope,
+        limit: policy.limit,
+        windowSeconds: policy.windowSeconds,
+        rateLimitReason:
+          action === "incident_cooldown"
+            ? "cooldown_90s"
+            : action === "incident" && scope === "actor"
+              ? "user_hourly_5"
+              : action === "incident" && scope === "network"
+                ? "network_hourly_30"
+                : `${action}_${scope}_limit`,
+      },
     });
   }
 }

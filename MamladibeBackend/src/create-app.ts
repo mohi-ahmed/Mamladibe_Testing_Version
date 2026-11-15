@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import { loadConfig, type AppConfig } from "./config/env.js";
 import { createPublicController } from "./controllers/public.controller.js";
 import { AppError } from "./lib/app-error.js";
+import { ActivityMonitoringService } from "./services/activity-monitoring.service.js";
 import { CaptchaService } from "./services/captcha.service.js";
 import { CommentService } from "./services/comment.service.js";
 import { GeocodeService } from "./services/geocode.service.js";
@@ -75,6 +76,7 @@ export function buildApp(options: AppOptions = {}) {
   const quota = options.quota ?? createQuota(config);
   const rateLimit = options.rateLimit ?? createRateLimit(config);
   const feedCache = options.feedCache ?? createFeedCache(config);
+  const monitoring = new ActivityMonitoringService();
   const loggingEnabled = options.logger ?? config.NODE_ENV !== "test";
   const app = Fastify({
     logger: loggingEnabled
@@ -113,6 +115,14 @@ export function buildApp(options: AppOptions = {}) {
     });
   }
 
+  app.addHook("onResponse", async (request, reply) => {
+    if (request.monitoringRecorded) return;
+    request.monitoringRecorded = true;
+    await monitoring.recordSuccess(request, reply.statusCode).catch((error) => {
+      request.log.error({ err: error, requestId: request.id }, "Could not record activity event");
+    });
+  });
+
   const captcha = new CaptchaService(
     config.TURNSTILE_SECRET,
     !config.isProduction && !config.TURNSTILE_SECRET,
@@ -144,7 +154,7 @@ export function buildApp(options: AppOptions = {}) {
     return reply.code(404).send("Not Found");
   });
 
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler(async (error, request, reply) => {
     let appError: AppError;
     if (error instanceof AppError) {
       appError = error;
@@ -158,6 +168,14 @@ export function buildApp(options: AppOptions = {}) {
       request.log.error({ err: error, requestId: request.id }, "Unhandled request error");
       appError = new AppError("INTERNAL_ERROR", "An unexpected error occurred.");
     }
+
+    request.monitoringRecorded = true;
+    await monitoring.recordFailure(request, appError, appError.status).catch((monitoringError) => {
+      request.log.error(
+        { err: monitoringError, requestId: request.id },
+        "Could not record failed activity event",
+      );
+    });
 
     return reply.code(appError.status).send({
       error: {

@@ -23,6 +23,7 @@ import { Route as AdminEnrolRouteImport } from './routes/admin.enrol'
 import { Route as AdminFlagsRouteImport } from './routes/admin.flags'
 import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminMonitoringRouteImport } from './routes/admin.monitoring'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as IncidentsIndexRouteImport } from './routes/incidents.index'
@@ -98,6 +99,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminMonitoringRoute = AdminMonitoringRouteImport.update({
+  id: '/monitoring',
+  path: '/monitoring',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/admin/flags': typeof AdminFlagsRoute
   '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/monitoring': typeof AdminMonitoringRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/incidents/$id': typeof IncidentsIdRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/admin/flags': typeof AdminFlagsRoute
   '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/monitoring': typeof AdminMonitoringRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/incidents/$id': typeof IncidentsIdRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/admin/flags': typeof AdminFlagsRoute
   '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/monitoring': typeof AdminMonitoringRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/incidents/$id': typeof IncidentsIdRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/admin/flags'
     | '/admin/incidents'
     | '/admin/login'
+    | '/admin/monitoring'
     | '/admin/settings'
     | '/admin/users'
     | '/incidents/$id'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/admin/flags'
     | '/admin/incidents'
     | '/admin/login'
+    | '/admin/monitoring'
     | '/admin/settings'
     | '/admin/users'
     | '/incidents/$id'
@@ -234,6 +245,7 @@ export interface FileRouteTypes {
     | '/admin/flags'
     | '/admin/incidents'
     | '/admin/login'
+    | '/admin/monitoring'
     | '/admin/settings'
     | '/admin/users'
     | '/incidents/$id'
@@ -351,6 +363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/monitoring': {
+      id: '/admin/monitoring'
+      path: '/monitoring'
+      fullPath: '/admin/monitoring'
+      preLoaderRoute: typeof AdminMonitoringRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/settings'
@@ -391,6 +410,7 @@ interface AdminRouteChildren {
   AdminFlagsRoute: typeof AdminFlagsRoute
   AdminIncidentsRoute: typeof AdminIncidentsRoute
   AdminLoginRoute: typeof AdminLoginRoute
+  AdminMonitoringRoute: typeof AdminMonitoringRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -405,6 +425,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminFlagsRoute: AdminFlagsRoute,
   AdminIncidentsRoute: AdminIncidentsRoute,
   AdminLoginRoute: AdminLoginRoute,
+  AdminMonitoringRoute: AdminMonitoringRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,

@@ -13,6 +13,7 @@ import {
   CommentModel,
   IncidentModel,
   IncidentVersionModel,
+  RateEventModel,
   ReportModel,
   VoteModel,
 } from "../models/index.js";
@@ -30,6 +31,24 @@ function escapeRegex(value: string) {
 }
 function anonymousId(actorId?: string) {
   return actorId ? `anon_${actorId.slice(0, 16)}` : undefined;
+}
+function networkId(value?: string) {
+  return value ? `net_${value.slice(0, 16)}` : undefined;
+}
+function monitoringEventDto(value: any) {
+  return {
+    id: String(value._id),
+    action: value.action,
+    result: value.result,
+    reason: value.reason,
+    ...(value.actorId ? { actorRef: anonymousId(value.actorId) } : {}),
+    ...(value.networkHash ? { networkRef: networkId(value.networkHash) } : {}),
+    ...(value.targetId ? { targetId: value.targetId } : {}),
+    statusCode: value.statusCode,
+    ...(value.retryAfterSeconds ? { retryAfterSeconds: value.retryAfterSeconds } : {}),
+    duplicateSignal: Boolean(value.duplicateSignal),
+    createdAt: new Date(value.createdAt).toISOString(),
+  };
 }
 function adminDto(value: any) {
   const item = typeof value.toObject === "function" ? value.toObject() : value;
@@ -190,6 +209,151 @@ export class AdminModerationService {
         flags: todayFlags,
       },
       waitingForReview: { incidentFlags, commentFlags, hiddenIncidents, hiddenComments },
+    };
+  }
+
+  async monitoringSummary() {
+    const now = Date.now();
+    const oneHourAgo = new Date(now - 60 * 60 * 1_000);
+    const dayAgo = new Date(now - 24 * 60 * 60 * 1_000);
+    const [summary, actorRefs, networkRefs] = await Promise.all([
+      RateEventModel.aggregate([
+        { $match: { createdAt: { $gte: dayAgo } } },
+        {
+          $group: {
+            _id: null,
+            reportAttempts24h: {
+              $sum: { $cond: [{ $eq: ["$action", "incident"] }, 1, 0] },
+            },
+            reportAttempts1h: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $eq: ["$action", "incident"] },
+                      { $gte: ["$createdAt", oneHourAgo] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            acceptedReports24h: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $eq: ["$action", "incident"] }, { $eq: ["$result", "accepted"] }] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            blocked24h: { $sum: { $cond: [{ $eq: ["$result", "blocked"] }, 1, 0] } },
+            cooldownBlocks24h: {
+              $sum: { $cond: [{ $eq: ["$reason", "cooldown_90s"] }, 1, 0] },
+            },
+            userLimitBlocks24h: {
+              $sum: { $cond: [{ $eq: ["$reason", "user_hourly_5"] }, 1, 0] },
+            },
+            networkLimitBlocks24h: {
+              $sum: { $cond: [{ $eq: ["$reason", "network_hourly_30"] }, 1, 0] },
+            },
+            captchaFailures24h: {
+              $sum: { $cond: [{ $eq: ["$reason", "captcha_failed"] }, 1, 0] },
+            },
+            invalidSubmissions24h: {
+              $sum: { $cond: [{ $eq: ["$reason", "invalid_submission"] }, 1, 0] },
+            },
+            duplicateSignals24h: {
+              $sum: { $cond: ["$duplicateSignal", 1, 0] },
+            },
+          },
+        },
+      ]),
+      RateEventModel.distinct("actorId", { createdAt: { $gte: dayAgo }, actorId: { $exists: true } }),
+      RateEventModel.distinct("networkHash", {
+        createdAt: { $gte: dayAgo },
+        networkHash: { $exists: true },
+      }),
+    ]);
+    const row = summary[0] ?? {};
+    return {
+      reportAttempts1h: row.reportAttempts1h ?? 0,
+      reportAttempts24h: row.reportAttempts24h ?? 0,
+      acceptedReports24h: row.acceptedReports24h ?? 0,
+      blocked24h: row.blocked24h ?? 0,
+      cooldownBlocks24h: row.cooldownBlocks24h ?? 0,
+      userLimitBlocks24h: row.userLimitBlocks24h ?? 0,
+      networkLimitBlocks24h: row.networkLimitBlocks24h ?? 0,
+      captchaFailures24h: row.captchaFailures24h ?? 0,
+      invalidSubmissions24h: row.invalidSubmissions24h ?? 0,
+      duplicateSignals24h: row.duplicateSignals24h ?? 0,
+      activeActors24h: actorRefs.length,
+      activeNetworks24h: networkRefs.length,
+    };
+  }
+
+  async listMonitoring(input: any) {
+    const filter: FilterQuery<any> = {
+      createdAt: {
+        $gte: input.from ? new Date(input.from) : new Date(Date.now() - 24 * 60 * 60 * 1_000),
+        ...(input.to ? { $lte: new Date(input.to) } : {}),
+      },
+    };
+    if (input.action) filter.action = input.action;
+    if (input.result) filter.result = input.result;
+    if (input.reason) filter.reason = input.reason;
+    if (input.q) {
+      const value = input.q.trim();
+      if (value.startsWith("anon_")) filter.actorId = new RegExp(`^${escapeRegex(value.slice(5))}`, "i");
+      else if (value.startsWith("net_"))
+        filter.networkHash = new RegExp(`^${escapeRegex(value.slice(4))}`, "i");
+      else {
+        const q = new RegExp(escapeRegex(value), "i");
+        filter.$or = [{ targetId: q }, { reason: q }, { action: q }];
+      }
+    }
+    const [items, total] = await Promise.all([
+      RateEventModel.find(filter)
+        .select("+actorId +networkHash")
+        .sort({ createdAt: input.sort === "oldest" ? 1 : -1 })
+        .skip((input.page - 1) * input.pageSize)
+        .limit(input.pageSize)
+        .lean(),
+      RateEventModel.countDocuments(filter),
+    ]);
+    return {
+      items: items.map(monitoringEventDto),
+      pagination: pagination(input.page, input.pageSize, total),
+    };
+  }
+
+  async monitoringSubject(input: any) {
+    const kind = input.actorRef ? "actor" : "network";
+    const supplied = (input.actorRef ?? input.networkRef) as string;
+    const prefix = supplied.replace(kind === "actor" ? /^anon_/i : /^net_/i, "");
+    if (!/^[a-f\d]{8,64}$/i.test(prefix))
+      throw new AppError("VALIDATION_ERROR", "Invalid monitoring subject reference.");
+    const field = kind === "actor" ? "actorId" : "networkHash";
+    const filter = { [field]: new RegExp(`^${escapeRegex(prefix)}`, "i") };
+    const events = await RateEventModel.find(filter)
+      .select("+actorId +networkHash")
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+    if (!events.length) throw new AppError("NOT_FOUND", "Monitoring subject not found.");
+    const totals = events.reduce(
+      (result, event: any) => {
+        result.attempts += 1;
+        result[event.result as "accepted" | "blocked" | "failed"] += 1;
+        return result;
+      },
+      { attempts: 0, accepted: 0, blocked: 0, failed: 0 },
+    );
+    return {
+      subject: { kind, ref: supplied },
+      totals,
+      timeline: events.map(monitoringEventDto),
     };
   }
 

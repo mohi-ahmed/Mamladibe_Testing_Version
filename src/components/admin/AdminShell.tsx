@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   Search,
   Settings,
+  ShieldAlert,
   Users,
   X,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const nav = [
   { to: "/admin/incidents", label: "Incidents", icon: FileWarning },
   { to: "/admin/comments", label: "Comments", icon: MessageSquareText },
   { to: "/admin/flags", label: "Flag reports", icon: Flag, count: true },
+  { to: "/admin/monitoring", label: "Spam monitoring", icon: ShieldAlert },
   { to: "/admin/activity", label: "Anonymous actors", icon: Activity },
   { to: "/admin/audit", label: "Audit log", icon: ClipboardList },
 ] as const;

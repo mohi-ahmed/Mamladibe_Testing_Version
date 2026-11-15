@@ -3,6 +3,7 @@ import "fastify";
 declare module "fastify" {
   interface FastifyRequest {
     networkHash?: string;
+    monitoringRecorded?: boolean;
     actor?: {
       id: string;
       token: string;
