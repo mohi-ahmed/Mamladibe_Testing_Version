@@ -85,7 +85,7 @@ export class GeocodeService {
 
   async search(rawQuery: string): Promise<{ locations: LocationSearchResult[] }> {
     const query = rawQuery.trim();
-    const key = `search:${query.toLocaleLowerCase("en-US")}`;
+    const key = `search:v2:${query.toLocaleLowerCase("en-US")}`;
     const cached: any = await GeoCacheModel.findOne({
       key,
       expiresAt: { $gt: new Date() },
@@ -139,6 +139,13 @@ export class GeocodeService {
           };
         })
         .filter((result): result is LocationSearchResult => Boolean(result?.label));
+      const seenLabels = new Set<string>();
+      locations = locations.filter((location) => {
+        const label = location.label.toLocaleLowerCase("bn-BD");
+        if (seenLabels.has(label)) return false;
+        seenLabels.add(label);
+        return true;
+      });
     } catch {
       throw new AppError("SERVICE_UNAVAILABLE", "Location search is temporarily unavailable.");
     }
