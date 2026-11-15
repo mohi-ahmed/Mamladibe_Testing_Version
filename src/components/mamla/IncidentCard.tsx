@@ -16,6 +16,7 @@ import { bn, categoryById, timeAgo, type Incident } from "@/lib/incidents";
 import { applyVoteResult, castVote, incidentKeys } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { RoadSign, catStyle } from "./RoadSign";
+import { IncidentShare } from "./IncidentShare";
 
 export function IncidentCard({
   incident,
@@ -165,6 +166,7 @@ export function IncidentCard({
           </Link>
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
+          <IncidentShare incident={incident} iconOnly />
           {incident.safetyTip && (
             <Lightbulb className="h-4 w-4 text-primary" aria-label="সেফটি টিপ আছে" />
           )}

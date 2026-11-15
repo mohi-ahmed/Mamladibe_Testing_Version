@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MapFrame } from "@/components/mamla/MapFrame";
+import { IncidentShare } from "@/components/mamla/IncidentShare";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
 import { Turnstile } from "@/components/mamla/Turnstile";
 import { Button } from "@/components/ui/button";
@@ -192,9 +193,12 @@ function IncidentView({ incident }: { incident: Incident }) {
                 </div>
               </div>
             </div>
-            <h1 className="mt-6 text-3xl font-extrabold leading-tight text-balance sm:text-[2.6rem]">
-              {incident.title}
-            </h1>
+            <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
+              <h1 className="min-w-0 flex-1 text-3xl font-extrabold leading-tight text-balance sm:text-[2.6rem]">
+                {incident.title}
+              </h1>
+              <IncidentShare incident={incident} />
+            </div>
             <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <MapPin className="h-4 w-4 text-primary" />
