@@ -138,6 +138,15 @@ const transitions = {
   restore: { from: ["deleted"], to: "hidden", audit: "restore" },
 } as const;
 
+const legacyCategoryAliases: Record<string, string> = {
+  road_accident: "accident",
+  traffic_violation: "violation",
+  police_misconduct: "police",
+  road_infrastructure: "road",
+  infrastructure: "road",
+  public_safety: "safety",
+};
+
 export class AdminModerationService {
   constructor(private readonly feedCache?: FeedCache) {}
 
@@ -306,27 +315,37 @@ export class AdminModerationService {
   }
 
   async moderateIncident(trackingId: string, input: any, admin: AdminContext) {
-    return withTransaction(async (session) => {
+    const result = await withTransaction(async (session) => {
       const incident = await IncidentModel.findOne({
         trackingId: trackingId.toUpperCase(),
-      }).session(session);
+      })
+        .select("trackingId status category")
+        .session(session);
       if (!incident) throw new AppError("NOT_FOUND", "Incident not found.");
       const rule = transitions[input.action as keyof typeof transitions];
       if (!(rule.from as readonly string[]).includes(incident.status))
         throw new AppError("CONFLICT", "Invalid incident status transition.");
       const before = { status: incident.status };
-      incident.status = rule.to;
-      if (rule.to === "hidden") incident.hiddenAt = new Date();
+      const now = new Date();
+      const set: Record<string, unknown> = { status: rule.to };
+      const unset: Record<string, 1> = {};
+      const canonicalCategory = legacyCategoryAliases[incident.category];
+      if (canonicalCategory) set.category = canonicalCategory;
+      if (rule.to === "hidden") set.hiddenAt = now;
       if (rule.to === "deleted") {
-        incident.deletedAt = new Date();
-        incident.purgeAt = new Date(Date.now() + 30 * 86_400_000);
+        set.deletedAt = now;
+        set.purgeAt = new Date(now.getTime() + 30 * 86_400_000);
+      } else {
+        unset.deletedAt = 1;
+        unset.purgeAt = 1;
       }
-      if (rule.to !== "deleted") {
-        incident.deletedAt = undefined;
-        incident.purgeAt = undefined;
-      }
-      if (rule.to === "published") incident.hiddenAt = undefined;
-      await incident.save({ session });
+      if (rule.to === "published") unset.hiddenAt = 1;
+      const updated = await IncidentModel.findOneAndUpdate(
+        { _id: incident._id, status: incident.status },
+        { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) },
+        { new: true, session, runValidators: false },
+      );
+      if (!updated) throw new AppError("CONFLICT", "Incident status changed. Try again.");
       await auditChange(
         session,
         admin,
@@ -335,10 +354,12 @@ export class AdminModerationService {
         incident.trackingId,
         input.reason,
         before,
-        { status: incident.status },
+        { status: updated.status },
       );
-      return { incident: await incidentDto(incident) };
+      return { incident: await incidentDto(updated) };
     });
+    await this.feedCache?.invalidate().catch(() => undefined);
+    return result;
   }
 
   async redactIncident(trackingId: string, input: any, admin: AdminContext) {
