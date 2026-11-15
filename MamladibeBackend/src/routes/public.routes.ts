@@ -43,6 +43,9 @@ export function registerPublicRoutes(
       await requirePublicActor(request, reply, config);
       if (action) {
         const network = networkHash(request, config);
+        if (action === "incident") {
+          await enforceRateLimit(rateLimit, "incident_cooldown", request.actor!.id, "actor");
+        }
         await Promise.all([
           enforceRateLimit(rateLimit, action, request.actor!.id, "actor"),
           enforceRateLimit(

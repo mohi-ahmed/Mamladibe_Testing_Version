@@ -304,5 +304,22 @@ export const api = {
 };
 
 export function apiMessage(error: unknown) {
+  if (error instanceof ApiError && error.code === "RATE_LIMITED") {
+    const rawSeconds = Number(error.details?.["retryAfterSeconds"]);
+    if (Number.isFinite(rawSeconds) && rawSeconds > 0) {
+      const seconds = Math.max(1, Math.ceil(rawSeconds));
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      const banglaNumber = (value: number) =>
+        String(value).replace(/\d/g, (digit) => "০১২৩৪৫৬৭৮৯"[Number(digit)] ?? digit);
+      const duration = [
+        minutes ? `${banglaNumber(minutes)} মিনিট` : "",
+        remainingSeconds ? `${banglaNumber(remainingSeconds)} সেকেন্ড` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `আরও ${duration} পরে আবার চেষ্টা করুন।`;
+    }
+  }
   return error instanceof ApiError ? error.message : "অনুরোধটি সম্পন্ন করা যায়নি।";
 }

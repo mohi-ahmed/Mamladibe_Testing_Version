@@ -2,7 +2,13 @@ import { Redis } from "@upstash/redis";
 
 import { AppError } from "../lib/app-error.js";
 
-export type RateLimitAction = "incident" | "vote" | "flag" | "track" | "admin_login";
+export type RateLimitAction =
+  | "incident"
+  | "incident_cooldown"
+  | "vote"
+  | "flag"
+  | "track"
+  | "admin_login";
 export type RateLimitScope = "actor" | "network";
 
 const POLICIES: Record<
@@ -11,7 +17,11 @@ const POLICIES: Record<
 > = {
   incident: {
     actor: { limit: 5, windowSeconds: 60 * 60 },
-    network: { limit: 5, windowSeconds: 60 * 60 },
+    network: { limit: 30, windowSeconds: 60 * 60 },
+  },
+  incident_cooldown: {
+    actor: { limit: 1, windowSeconds: 90 },
+    network: { limit: 30, windowSeconds: 90 },
   },
   vote: {
     actor: { limit: 120, windowSeconds: 60 },

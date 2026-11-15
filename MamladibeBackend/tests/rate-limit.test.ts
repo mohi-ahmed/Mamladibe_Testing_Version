@@ -28,9 +28,23 @@ describe("public action rate limits", () => {
     });
   });
 
+  it("requires 90 seconds between incidents from the same actor", async () => {
+    const store = new InMemoryRateLimitStore();
+    await expect(
+      enforceRateLimit(store, "incident_cooldown", "actor", "actor"),
+    ).resolves.toBeUndefined();
+    await expect(
+      enforceRateLimit(store, "incident_cooldown", "actor", "actor"),
+    ).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      status: 429,
+      options: { details: { retryAfterSeconds: expect.any(Number) } },
+    });
+  });
+
   it("limits a network even when cookie actors change", async () => {
     const store = new InMemoryRateLimitStore();
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 30; index += 1) {
       await expect(
         enforceRateLimit(store, "incident", "shared-network", "network"),
       ).resolves.toBeUndefined();
