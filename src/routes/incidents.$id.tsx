@@ -57,11 +57,50 @@ import {
 import { cn } from "@/lib/utils";
 import { trackingHandoffStatus } from "@/lib/tracking-handoff";
 
+const SITE_ORIGIN = "https://mamladibetestingv1.vercel.app";
+const PUBLIC_API_ORIGIN =
+  (import.meta.env["VITE_API_BASE_URL"] as string | undefined)?.replace(/\/$/, "") ||
+  (import.meta.env.DEV ? "http://127.0.0.1:3001" : "https://mamladibe-backend-tau.vercel.app");
+
+interface SocialIncident {
+  trackingId: string;
+  title: string;
+  description: string;
+  areaName: string;
+  category: Incident["category"];
+}
+
+async function loadSocialIncident(id: string): Promise<SocialIncident | null> {
+  try {
+    const response = await fetch(
+      `${PUBLIC_API_ORIGIN}/api/incidents/${encodeURIComponent(id.toUpperCase())}`,
+      { headers: { accept: "application/json" } },
+    );
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { incident?: SocialIncident };
+    return payload.incident ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const Route = createFileRoute("/incidents/$id")({
-  head: ({ params }) => {
-    const seed = SEED_INCIDENTS.find((i) => i.id === params.id);
-    const title = seed ? `${seed.title} — Mamladibe` : "ঘটনার বিস্তারিত — Mamladibe";
-    const desc = seed ? seed.description.slice(0, 150) : "কমিউনিটির রিপোর্ট করা রাস্তার ঘটনা।";
+  loader: ({ params }) => loadSocialIncident(params.id),
+  head: ({ params, loaderData }) => {
+    const incident = loaderData;
+    const seed = incident ? null : SEED_INCIDENTS.find((item) => item.id === params.id);
+    const title = incident
+      ? `${incident.title} — Mamladibe`
+      : seed
+        ? `${seed.title} — Mamladibe`
+        : "ঘটনার বিস্তারিত — Mamladibe";
+    const descriptionSource = incident?.description ?? seed?.description;
+    const desc = descriptionSource
+      ? `${descriptionSource.slice(0, 145)}${descriptionSource.length > 145 ? "…" : ""}`
+      : "কমিউনিটির রিপোর্ট করা রাস্তার ঘটনা।";
+    const canonicalUrl = `${SITE_ORIGIN}/incidents/${params.id.toLowerCase()}`;
+    const previewImage = `${SITE_ORIGIN}/mamladibe-social-preview.png`;
+    const category = incident ? categoryById(incident.category).bn : "রাস্তার ঘটনা";
     return {
       meta: [
         { title },
@@ -69,8 +108,24 @@ export const Route = createFileRoute("/incidents/$id")({
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
         { property: "og:type", content: "article" },
+        { property: "og:url", content: canonicalUrl },
+        { property: "og:site_name", content: "Mamladibe" },
+        { property: "og:locale", content: "bn_BD" },
+        { property: "og:image", content: previewImage },
+        { property: "og:image:secure_url", content: previewImage },
+        { property: "og:image:type", content: "image/png" },
+        { property: "og:image:width", content: "1734" },
+        { property: "og:image:height", content: "907" },
+        {
+          property: "og:image:alt",
+          content: `${category}${incident?.areaName ? ` — ${incident.areaName}` : ""} — Mamladibe`,
+        },
         { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: desc },
+        { name: "twitter:image", content: previewImage },
       ],
+      links: [{ rel: "canonical", href: canonicalUrl }],
     };
   },
   component: IncidentPage,
