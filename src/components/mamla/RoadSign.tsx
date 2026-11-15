@@ -58,7 +58,7 @@ export function RoadSign({
 }) {
   const cat = categoryById(category);
   const Shape = SHAPES[cat.shape];
-  const Icon = CATEGORY_ICONS[category];
+  const Icon = CATEGORY_ICONS[cat.id];
   return (
     <span
       className={cn("relative inline-grid shrink-0 place-items-center", className)}

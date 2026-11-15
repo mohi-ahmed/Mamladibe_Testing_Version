@@ -62,7 +62,8 @@ export const CATEGORIES: Category[] = [
   },
 ];
 
-export const categoryById = (id: CategoryId) => CATEGORIES.find((c) => c.id === id)!;
+export const categoryById = (id: CategoryId | string) =>
+  CATEGORIES.find((c) => c.id === id) ?? CATEGORIES.find((c) => c.id === "other")!;
 
 export interface Incident {
   id: string;

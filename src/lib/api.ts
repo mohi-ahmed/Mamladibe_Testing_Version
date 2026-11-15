@@ -53,8 +53,14 @@ export interface HomepageFeed {
 let identityRequest: Promise<void> | null = null;
 
 function incidentFromApi(value: PublicIncident): Incident {
+  const category = ["accident", "violation", "police", "road", "safety", "other"].includes(
+    value.category,
+  )
+    ? value.category
+    : "other";
   return {
     ...value,
+    category,
     id: value.trackingId.toLowerCase(),
     incidentAt: Date.parse(value.incidentAt),
     createdAt: Date.parse(value.createdAt),
