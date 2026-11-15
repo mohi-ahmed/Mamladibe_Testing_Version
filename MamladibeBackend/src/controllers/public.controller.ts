@@ -19,6 +19,7 @@ import {
   createCommentSchema,
   createIncidentSchema,
   editIncidentSchema,
+  geocodeSearchSchema,
   incidentReportSchema,
   listCommentsQuerySchema,
   listIncidentsQuerySchema,
@@ -154,6 +155,11 @@ export function createPublicController(config: AppConfig, services: Services) {
     reverseGeocode: async (request: FastifyRequest) => {
       const input = parseInput(reverseGeocodeSchema, request.query);
       return services.geocode.reverse(input.lat!, input.lng!);
+    },
+
+    searchLocations: async (request: FastifyRequest) => {
+      const input = parseInput(geocodeSearchSchema, request.query);
+      return services.geocode.search(input.q);
     },
   };
 }

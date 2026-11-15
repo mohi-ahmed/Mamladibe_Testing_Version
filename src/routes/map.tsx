@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, MapPin, ThumbsDown, ThumbsUp, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { ArrowUpRight, LoaderCircle, MapPin, Search, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CategoryFilter } from "@/components/mamla/CategoryFilter";
 import { MapFrame } from "@/components/mamla/MapFrame";
 import type { MapBounds } from "@/components/mamla/IncidentMap";
 import { RoadSign, catStyle } from "@/components/mamla/RoadSign";
 import { Button } from "@/components/ui/button";
-import { apiMessage } from "@/lib/api";
+import { api, apiMessage, type LocationSearchResult } from "@/lib/api";
 import { CATEGORIES, bn, categoryById, timeAgo, type CategoryId } from "@/lib/incidents";
 import { useIncidentList } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,13 @@ function MapPage() {
   const [cat, setCat] = useState<CategoryId | "all">("all");
   const [selected, setSelected] = useState<string | null>(null);
   const [bounds, setBounds] = useState<MapBounds | null>(null);
+  const [locationQuery, setLocationQuery] = useState("");
+  const [locationResults, setLocationResults] = useState<LocationSearchResult[]>([]);
+  const [locationError, setLocationError] = useState("");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [mapFocus, setMapFocus] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
+  const locationRequestId = useRef(0);
   const incidentQuery = useIncidentList(
     bounds
       ? {
@@ -67,6 +74,63 @@ function MapPage() {
         : rounded,
     );
   }, []);
+
+  const searchLocations = useCallback(async (value: string) => {
+    const query = value.trim();
+    if (query.length < 2) {
+      setLocationResults([]);
+      setLocationError("");
+      setLocationLoading(false);
+      return [];
+    }
+    const requestId = ++locationRequestId.current;
+    setLocationLoading(true);
+    setLocationError("");
+    try {
+      const result = await api.searchLocations(query);
+      if (requestId !== locationRequestId.current) return [];
+      setLocationResults(result.locations);
+      setLocationOpen(true);
+      if (result.locations.length === 0) setLocationError("কোনো মিল পাওয়া যায়নি।");
+      return result.locations;
+    } catch (error) {
+      if (requestId !== locationRequestId.current) return [];
+      setLocationResults([]);
+      setLocationOpen(true);
+      setLocationError(apiMessage(error));
+      return [];
+    } finally {
+      if (requestId === locationRequestId.current) setLocationLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const query = locationQuery.trim();
+    if (query.length < 2) {
+      locationRequestId.current += 1;
+      setLocationResults([]);
+      setLocationError("");
+      setLocationOpen(false);
+      setLocationLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => void searchLocations(query), 350);
+    return () => window.clearTimeout(timer);
+  }, [locationQuery, searchLocations]);
+
+  const chooseLocation = useCallback((location: LocationSearchResult) => {
+    setLocationQuery(location.roadName || location.areaName || location.label.split(",")[0] || "");
+    setLocationOpen(false);
+    setLocationResults([]);
+    setSelected(null);
+    setMapFocus({ lat: location.lat, lng: location.lng, zoom: 14 });
+  }, []);
+
+  const submitLocationSearch = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const results = locationResults.length ? locationResults : await searchLocations(locationQuery);
+    if (results[0]) chooseLocation(results[0]);
+  };
 
   return (
     <div className="mx-auto max-w-[1600px] px-3 pt-4 sm:px-6">
@@ -135,9 +199,70 @@ function MapPage() {
             selectedId={selected}
             onSelect={setSelected}
             onBoundsChange={handleBoundsChange}
+            focus={mapFocus}
           />
 
           <div className="pointer-events-none absolute inset-x-3 top-3 z-[500] flex flex-col gap-3">
+            <form
+              onSubmit={submitLocationSearch}
+              className="pointer-events-auto relative w-full max-w-xl"
+              role="search"
+            >
+              <div className="flex items-center gap-2 rounded-2xl border border-border bg-popover/95 p-2 shadow-card backdrop-blur">
+                <Search className="ml-2 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <input
+                  value={locationQuery}
+                  onChange={(event) => setLocationQuery(event.target.value)}
+                  onFocus={() => {
+                    if (locationQuery.trim().length >= 2) setLocationOpen(true);
+                  }}
+                  placeholder="এলাকা বা রাস্তার নাম লিখুন"
+                  aria-label="এলাকা বা রাস্তা খুঁজুন"
+                  aria-expanded={locationOpen}
+                  aria-controls="map-location-results"
+                  autoComplete="off"
+                  className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground"
+                />
+                <Button
+                  type="submit"
+                  variant="road"
+                  size="sm"
+                  disabled={locationLoading || locationQuery.trim().length < 2}
+                >
+                  {locationLoading ? <LoaderCircle className="animate-spin" /> : "খুঁজুন"}
+                </Button>
+              </div>
+
+              {locationOpen && (locationResults.length > 0 || locationError) && (
+                <div
+                  id="map-location-results"
+                  className="absolute inset-x-0 top-[calc(100%+.4rem)] max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover/98 p-1.5 shadow-card backdrop-blur"
+                >
+                  {locationError && (
+                    <p className="px-3 py-3 text-sm text-muted-foreground">{locationError}</p>
+                  )}
+                  {locationResults.map((location, index) => (
+                    <button
+                      key={`${location.lat}:${location.lng}:${index}`}
+                      type="button"
+                      onClick={() => chooseLocation(location)}
+                      className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                    >
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">
+                          {location.roadName || location.areaName || location.label.split(",")[0]}
+                        </span>
+                        <span className="mt-0.5 block line-clamp-2 text-xs text-muted-foreground">
+                          {location.label}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </form>
+
             <div className="pointer-events-auto rounded-2xl border border-border bg-popover/90 p-2 backdrop-blur">
               <CategoryFilter
                 value={cat}

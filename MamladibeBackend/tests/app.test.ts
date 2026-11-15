@@ -46,6 +46,7 @@ describe("HTTP contract", () => {
       ["POST", "/api/track"],
       ["PATCH", "/api/incidents/:trackingId/edit"],
       ["GET", "/api/geo/reverse"],
+      ["GET", "/api/geo/search"],
     ] as const;
 
     for (const [method, url] of routes) {

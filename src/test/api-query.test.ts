@@ -61,4 +61,20 @@ describe("incident list API queries", () => {
       pageSize: "100",
     });
   });
+
+  it("encodes an area or road name for location search", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ locations: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.searchLocations("মিরপুর ১০");
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]), "http://localhost");
+    expect(url.pathname).toBe("/api/geo/search");
+    expect(url.searchParams.get("q")).toBe("মিরপুর ১০");
+  });
 });

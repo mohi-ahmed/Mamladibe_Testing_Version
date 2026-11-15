@@ -124,3 +124,7 @@ export const reverseGeocodeSchema = z
   .refine((value) => value.lat !== undefined && value.lng !== undefined, {
     message: "lat and lng are required",
   });
+
+export const geocodeSearchSchema = z
+  .object({ q: z.string().trim().min(2).max(100) })
+  .strict();

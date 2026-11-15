@@ -50,6 +50,14 @@ export interface HomepageFeed {
   };
 }
 
+export interface LocationSearchResult {
+  label: string;
+  lat: number;
+  lng: number;
+  roadName: string;
+  areaName: string;
+}
+
 let identityRequest: Promise<void> | null = null;
 
 function incidentFromApi(value: PublicIncident): Incident {
@@ -299,6 +307,12 @@ export const api = {
   async reverseGeocode(lat: number, lng: number) {
     return request<{ location: { roadName: string; areaName: string } }>(
       `/api/geo/reverse${query({ lat, lng })}`,
+    );
+  },
+
+  async searchLocations(search: string) {
+    return request<{ locations: LocationSearchResult[] }>(
+      `/api/geo/search${query({ q: search.trim() })}`,
     );
   },
 };

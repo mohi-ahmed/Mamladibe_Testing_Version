@@ -113,6 +113,11 @@ export function registerPublicRoutes(
     controller.editIncident,
   );
   app.get("/api/geo/reverse", controller.reverseGeocode);
+  app.get(
+    "/api/geo/search",
+    { preHandler: networkLimited("geo_search") },
+    controller.searchLocations,
+  );
 }
 
 function trackingIdFromRequest(request: FastifyRequest) {

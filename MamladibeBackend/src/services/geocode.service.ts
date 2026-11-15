@@ -4,6 +4,9 @@ import { AppError } from "../lib/app-error.js";
 import { GeoCacheModel } from "../models/index.js";
 
 interface NominatimResult {
+  lat?: string;
+  lon?: string;
+  display_name?: string;
   address?: {
     road?: string;
     neighbourhood?: string;
@@ -12,7 +15,16 @@ interface NominatimResult {
     city?: string;
     town?: string;
     village?: string;
+    state?: string;
   };
+}
+
+export interface LocationSearchResult {
+  label: string;
+  lat: number;
+  lng: number;
+  roadName: string;
+  areaName: string;
 }
 
 export class GeocodeService {
@@ -69,5 +81,79 @@ export class GeocodeService {
       { upsert: true },
     );
     return { location: { roadName, areaName } };
+  }
+
+  async search(rawQuery: string): Promise<{ locations: LocationSearchResult[] }> {
+    const query = rawQuery.trim();
+    const key = `search:${query.toLocaleLowerCase("en-US")}`;
+    const cached: any = await GeoCacheModel.findOne({
+      key,
+      expiresAt: { $gt: new Date() },
+    }).lean();
+    if (Array.isArray(cached?.results)) {
+      return { locations: cached.results as LocationSearchResult[] };
+    }
+
+    const url = new URL("/search", this.config.GEOCODER_BASE_URL);
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("q", query);
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("countrycodes", "bd");
+    url.searchParams.set("limit", "6");
+    url.searchParams.set("accept-language", "bn,en");
+
+    let locations: LocationSearchResult[] = [];
+    try {
+      const response = await fetch(url, {
+        headers: { "user-agent": this.config.GEOCODER_USER_AGENT, accept: "application/json" },
+        signal: AbortSignal.timeout(4_000),
+      });
+      if (!response.ok) {
+        throw new Error(`Geocoder returned ${response.status}`);
+      }
+      const results = (await response.json()) as NominatimResult[];
+      locations = results
+        .map((result) => {
+          const lat = Number(result.lat);
+          const lng = Number(result.lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isInBangladesh(lat, lng)) {
+            return null;
+          }
+          const address = result.address ?? {};
+          const roadName = address.road ?? "";
+          const areaName =
+            address.neighbourhood ??
+            address.suburb ??
+            address.city_district ??
+            address.city ??
+            address.town ??
+            address.village ??
+            address.state ??
+            "";
+          return {
+            label: result.display_name?.trim() || [roadName, areaName].filter(Boolean).join(", "),
+            lat,
+            lng,
+            roadName,
+            areaName,
+          };
+        })
+        .filter((result): result is LocationSearchResult => Boolean(result?.label));
+    } catch {
+      throw new AppError("SERVICE_UNAVAILABLE", "Location search is temporarily unavailable.");
+    }
+
+    await GeoCacheModel.findOneAndUpdate(
+      { key },
+      {
+        $set: {
+          results: locations,
+          provider: "nominatim",
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000),
+        },
+      },
+      { upsert: true },
+    );
+    return { locations };
   }
 }

@@ -74,6 +74,7 @@ interface Props {
   onPick?: (p: { lat: number; lng: number }) => void;
   center?: [number, number];
   zoom?: number;
+  focus?: { lat: number; lng: number; zoom?: number } | null;
   interactive?: boolean;
   className?: string;
 }
@@ -87,6 +88,7 @@ export function IncidentMap({
   onPick,
   center = DHAKA_CENTER,
   zoom = 12,
+  focus,
   interactive = true,
   className,
 }: Props) {
@@ -99,9 +101,11 @@ export function IncidentMap({
   const onPickRef = useRef(onPick);
   const onSelectRef = useRef(onSelect);
   const onBoundsChangeRef = useRef(onBoundsChange);
+  const focusRef = useRef(focus);
   onPickRef.current = onPick;
   onSelectRef.current = onSelect;
   onBoundsChangeRef.current = onBoundsChange;
+  focusRef.current = focus;
 
   // init
   useEffect(() => {
@@ -177,7 +181,11 @@ export function IncidentMap({
         };
         map.on("moveend", emitBounds);
         mapRef.current = map;
-        map.whenReady(emitBounds);
+        map.whenReady(() => {
+          const target = focusRef.current;
+          if (target) map.flyTo([target.lat, target.lng], target.zoom ?? 14, { duration: 0.8 });
+          emitBounds();
+        });
         // trigger render of markers
         el.current.dispatchEvent(new Event("mamla:ready"));
       })
@@ -231,6 +239,14 @@ export function IncidentMap({
     const sel = incidents.find((i) => i.id === selectedId);
     if (map && sel) map.flyTo([sel.lat, sel.lng], Math.max(map.getZoom(), 14), { duration: 0.8 });
   }, [selectedId, incidents]);
+
+  // fly to an area or road selected from location search
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && focus) {
+      map.flyTo([focus.lat, focus.lng], focus.zoom ?? 14, { duration: 0.8 });
+    }
+  }, [focus]);
 
   // picked pin
   useEffect(() => {

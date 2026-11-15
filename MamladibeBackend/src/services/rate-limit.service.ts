@@ -7,6 +7,7 @@ export type RateLimitAction =
   | "incident_cooldown"
   | "vote"
   | "flag"
+  | "geo_search"
   | "track"
   | "admin_login";
 export type RateLimitScope = "actor" | "network";
@@ -30,6 +31,10 @@ const POLICIES: Record<
   flag: {
     actor: { limit: 30, windowSeconds: 60 * 60 },
     network: { limit: 30, windowSeconds: 60 * 60 },
+  },
+  geo_search: {
+    actor: { limit: 30, windowSeconds: 60 },
+    network: { limit: 30, windowSeconds: 60 },
   },
   track: {
     actor: { limit: 30, windowSeconds: 15 * 60 },

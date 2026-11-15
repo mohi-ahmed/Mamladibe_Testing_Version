@@ -7,6 +7,7 @@ const geoCacheSchema = new Schema(
     key: { type: String, required: true, unique: true },
     roadName: String,
     areaName: String,
+    results: [Schema.Types.Mixed],
     provider: { type: String, required: true },
     expiresAt: { type: Date, required: true },
   },
