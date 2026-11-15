@@ -99,7 +99,7 @@ export const Route = createFileRoute("/incidents/$id")({
       ? `${descriptionSource.slice(0, 145)}${descriptionSource.length > 145 ? "…" : ""}`
       : "কমিউনিটির রিপোর্ট করা রাস্তার ঘটনা।";
     const canonicalUrl = `${SITE_ORIGIN}/incidents/${params.id.toLowerCase()}`;
-    const previewImage = `${SITE_ORIGIN}/mamladibe-social-preview.png`;
+    const previewImage = `${SITE_ORIGIN}/mamladibe-social-preview-v2.jpg`;
     const category = incident ? categoryById(incident.category).bn : "রাস্তার ঘটনা";
     return {
       meta: [
@@ -113,9 +113,9 @@ export const Route = createFileRoute("/incidents/$id")({
         { property: "og:locale", content: "bn_BD" },
         { property: "og:image", content: previewImage },
         { property: "og:image:secure_url", content: previewImage },
-        { property: "og:image:type", content: "image/png" },
-        { property: "og:image:width", content: "1734" },
-        { property: "og:image:height", content: "907" },
+        { property: "og:image:type", content: "image/jpeg" },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
         {
           property: "og:image:alt",
           content: `${category}${incident?.areaName ? ` — ${incident.areaName}` : ""} — Mamladibe`,
